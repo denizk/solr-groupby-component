@@ -2,27 +2,32 @@
 	xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.0"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.0 http://maven.apache.org/xsd/assembly-1.1.0.xsd">
-	<id>job</id>
+	<id>solr-groupby-search-handler</id>
 	<formats>
 		<format>jar</format>
 	</formats>
 	<includeBaseDirectory>false</includeBaseDirectory>
 	<dependencySets>
 		<dependencySet>
-			<unpack>false</unpack>
-			<scope>runtime</scope>
-			<outputDirectory>lib</outputDirectory>
+			<unpack>true</unpack>
+			<outputDirectory>/</outputDirectory>
+			<useTransitiveFiltering>true</useTransitiveFiltering>
+			<!-- 
 			<excludes>
-				<exclude>${artifact.groupId}:${artifact.artifactId}</exclude>
+				<exclude>log4j:log4j</exclude>
+				<exclude>org.slf4j:slf4j-api</exclude>
+				<exclude>org.slf4j:slf4j-log4j12</exclude>
+				<exclude>ch.qos.logback:logback-core</exclude>
+				<exclude>org.apache.hadoop:hadoop-common</exclude>
+				<exclude>org.apache.hbase:hbase</exclude>
+				<exclude>org.apache.hadoop:hadoop-core</exclude>
+				<exclude>org.apache.zookeeper:zookeeper</exclude>
+				<exclude>storm:storm</exclude>
 			</excludes>
-		</dependencySet>
-		<dependencySet>
-			<unpack>false</unpack>
-			<scope>system</scope>
-			<outputDirectory>lib</outputDirectory>
-			<excludes>
-				<exclude>${artifact.groupId}:${artifact.artifactId}</exclude>
-			</excludes>
+			-->
+			<includes>
+				<include>com.clearspring.analytics:stream</include>
+			</includes>
 		</dependencySet>
 	</dependencySets>
 	<fileSets>

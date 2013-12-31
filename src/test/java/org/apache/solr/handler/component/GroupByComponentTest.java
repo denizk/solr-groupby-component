@@ -359,7 +359,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
     @Test
     public void testPercentiles() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
-        p.set("q", "*:*");
+        p.set("q", "order_date:A*");
         p.set("wt", "xml");
         p.set("rows", "0");
         p.set("indent", "true");
@@ -367,6 +367,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         p.add(GroupByComponent.Params.STATS, "noun:xact/product_purchase_amount");
         p.set(GroupByComponent.Params.PERCENTILES, "25,50,75");
         p.set(GroupByComponent.Params.PERCENTILES_COMPRESSION, "1000");
+        p.set(GroupByComponent.Params.DEBUG, true);
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
@@ -463,6 +464,20 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
+    }
+    
+    @Test
+    public void testWildcardDrillThrough() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set(GroupByComponent.Params.GROUPBY, "noun:shopper/id,noun:xact/product_brand_name:R*");
+        p.add(GroupByComponent.Params.STATS, "noun:xact/product_purchase_amount");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
     }
 
     private NodeList xpath(String xml, String xpath) throws SAXException, IOException, XPathExpressionException {

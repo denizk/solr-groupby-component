@@ -67,9 +67,7 @@ public class Aggregate {
     }
 
     private AggregationResult sum(String fieldName) throws IOException {
-        ModifiableSolrParams p = new ModifiableSolrParams(this.req.getParams());
-        p.set("facet.mincount", 1);
-        SimpleFacets facets = new SimpleFacets(this.req, base, p);
+        SimpleFacets facets = new SimpleFacets(this.req, base, this.req.getParams());
 
         NamedList<Integer> terms = facets.getTermCounts(fieldName, base);
 
