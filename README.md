@@ -20,6 +20,12 @@ This component implements a custom SearchComponent and can be registered in your
 
 The component is pretty basic, and needs some level of re-factoring as it doesn't provide the full range of possible slicing and dicing SOLR can do with regular 'fq' and 'q' queries.
 
+# Next Releases #
+
++ Distributed Support (QDigest, HyperLogLog, etc)
++ Add Distinct(...), Having(...)
++ Aggregate Filters (already checked in but need some tweaks)
+
 # What it can do #
 
 That being said it can provide some fairly nice pivot trees with percentiles, sum, and averages. It also has features to allow for facet/pivot on Block Join documents.
