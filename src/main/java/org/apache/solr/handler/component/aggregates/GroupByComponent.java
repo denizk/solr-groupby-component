@@ -11,16 +11,12 @@ import java.util.Set;
 
 import org.apache.commons.lang.time.StopWatch;
 import org.apache.lucene.index.Term;
-import org.apache.lucene.queryparser.flexible.standard.processors.TermRangeQueryNodeProcessor;
-import org.apache.lucene.queryparser.xml.builders.NumericRangeQueryBuilder;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
-import org.apache.lucene.search.NumericRangeQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryWrapperFilter;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.search.join.FixedBitSetCachingWrapperFilter;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
@@ -93,7 +89,6 @@ public class GroupByComponent extends SearchComponent {
     @Override
     public void prepare(ResponseBuilder rb) throws IOException {
         if (rb.req.getParams().get(Params.GROUPBY, "").isEmpty() == false) {
-            rb.setNeedDocSet(false);
             if (log.isDebugEnabled()) {
                 log.debug("Activated GroupByComponent");
             }
@@ -117,7 +112,7 @@ public class GroupByComponent extends SearchComponent {
         // TODO - "groupby having(*)"
         ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
         params.set("facet", true);
-        params.set("facet.limit", req.getParams().getInt(Params.LIMIT, Integer.MAX_VALUE));
+        params.set("facet.limit", Integer.MAX_VALUE);
         params.set("facet.missing", false);
         params.set("facet.mincount", req.getParams().getInt(Params.MINCOUNT, 1));
 
@@ -152,14 +147,6 @@ public class GroupByComponent extends SearchComponent {
         if (req.getParams().getBool(Params.DEBUG, false)) {
             rb.rsp.add("groups.debug", debug);
         }
-    }
-
-    @Override
-    public NamedList getStatistics() {
-        NamedList<Object> stats = new SimpleOrderedMap<Object>();
-        stats.add("total_requests", totalRequests);
-        stats.add("avg_time_to_process", "");
-        return stats;
     }
 
     private SimpleOrderedMap<Object> collect(LinkedList<String> queue, SolrQueryRequest req, SolrParams params, List<Function<AggregationResult, Boolean>> predicates) throws IOException {

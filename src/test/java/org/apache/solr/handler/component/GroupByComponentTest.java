@@ -428,9 +428,8 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
     }
 
     /**
-     * There are shoppers who shop in multiple cities (in this example MIAMI and SUNRISE) we want to
-     * ensure that if we pivot over city twice we get the pair-wise combinations of this such that
-     * we get back MIAMI => [MIAMI,SUNRISE]
+     * In this example we expect to get back $15.00 spend as there is $10.00 of spend in TAMPA for shopper 1,
+     * and $5.00 of spend in shopper 2 (however; shopper 2 has other spend in other cities which should not count).
      * 
      * @throws Exception
      */
@@ -448,8 +447,16 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
+        
+        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
+        assertEquals(1, nodes.getLength());
+        assertEquals("15.0", nodes.item(0).getTextContent());
     }
 
+    /**
+     * Expected to fail...
+     * @throws Exception
+     */
     @Test
     public void testPredicate() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
@@ -464,8 +471,15 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
+        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
+        assertEquals(1, nodes.getLength());
+        assertEquals("15.0", nodes.item(0).getTextContent());
     }
     
+    /**
+     * Expected to fail...
+     * @throws Exception
+     */
     @Test
     public void testWildcardDrillThrough() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
@@ -478,6 +492,10 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
+        
+        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
+        assertEquals(1, nodes.getLength());
+        assertEquals("15.0", nodes.item(0).getTextContent());
     }
 
     private NodeList xpath(String xml, String xpath) throws SAXException, IOException, XPathExpressionException {
