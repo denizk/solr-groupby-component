@@ -107,7 +107,7 @@ At this point you are probably wondering what the heck this syntax is. It kinda-
 
 If you index document using flattened structures, you can ignore the syntax entirely. In-fact, you should probably just use facets and stats components if you are in this camp and stop here.
 
-However, if you have documents which by-their-nature are hierarchical in form and query function you may find out that SOLR 4.5+ includes a [Block Join Support](https://issues.apache.org/jira/browse/SOLR-3076). If you haven't heard of it, well, it's amazing - read up.
+However, if you have documents which by-their-nature are hierarchical in form and function you may like to know that SOLR 4.5+ includes a [Block Join Support](https://issues.apache.org/jira/browse/SOLR-3076). If you haven't heard of it, well, it's amazing - read up!
 
 Block Join [has very performance numbers](http://blog.griddynamics.com/2012/08/block-join-query-performs.html) and indexing is really easy. Simply create a SolrInputDocument and than add your children to that document, and add children to those children, etc.
 
