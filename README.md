@@ -128,9 +128,8 @@ We'll because the root problem is we are constructing joins and because we **WAN
 **The good:**
 
 + You can issue both `groupby` commands and normal solr queries like `facet`, `stats`, `q`, and others just fine and even in the same REST call.
-+ You don't have to recompile SOLR to get this new feature, just grab and JAR and register it in any SOLR version from 4.5 and above.
++ You don't have to recompile SOLR to get this new feature, just grab the JAR and register it in any SOLR version from 4.5 and above.
 + Its just as performant as a native component.
-+ + In most cases for facets/pivots in native SOLR it can't understand block joins (which is why you might be reading this in the first place)
 + Different things should be different.
 
 **The bad:**
