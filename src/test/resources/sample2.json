@@ -1,0 +1,59 @@
+/* a consumer who shops in two different locations */
+{
+  "id" : 22222222,
+  "orders" : [ 
+	  {
+	    "date" : 20130514,
+	    "address" : {
+	      "state" : "FLORIDA",
+	      "city" : "MIAMI",
+	      "postal_code" : "33634",
+	      "fips_code" : "12086",
+	      "market" : "MIAMI",
+	      "region" : "SOUTHEAST",
+	      "latitude" : 25.808700561523438,
+	      "longitude" : -80.19509887695312
+	    },
+	    "transactions" : [
+	    	{
+		    	"quantity" : 1,
+		      	"amount" : 5.0,
+		      	"upc" : "12341234",
+		      	"category" : "ENERGY DRINKS",
+		      	"subcategory" : "SUPPLIMENTS",
+		      	"manufacturer" : "RED BULL NORTH AMERICA",
+		      	"corporation" : "RED BULL",
+		      	"brand" : "RED BULL",
+		      	"type" : "ENERGY DRINKS/SHOTS"
+	    	}
+	    ]
+	  },
+	  {
+	    "date" : 20130514,
+	    "address" : {
+	      "state" : "FLORIDA",
+	      "city" : "TAMPA",
+	      "county" : "HILLSBOROUGH",
+	      "postal_code" : "33634",
+	      "fips_code" : "12086",
+	      "market" : "TAMPA/ST. PETERSBURG",
+	      "region" : "SOUTHEAST",
+	      "latitude" : 25.808700561523438,
+	      "longitude" : -80.19509887695312
+	    },
+	    "transactions" : [
+	    	{
+		    	"quantity" : 1,
+		      	"amount" : 5.0,
+		      	"upc" : "12341234",
+		      	"category" : "ENERGY DRINKS",
+		      	"subcategory" : "SUPPLIMENTS",
+		      	"manufacturer" : "RED BULL NORTH AMERICA",
+		      	"corporation" : "RED BULL",
+		      	"brand" : "RED BULL",
+		      	"type" : "ENERGY DRINKS/SHOTS"
+	    	}
+	    ]
+	  }
+  ]
+}
