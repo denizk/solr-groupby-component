@@ -68,7 +68,7 @@ public class Aggregate {
 
     private AggregationResult sum(String fieldName) throws IOException {
         int page = 0;
-        int size = this.req.getParams().getInt(GroupByComponent.Params.SIZE, 100);
+        int size = this.req.getParams().getInt(GroupByComponent.Params.SIZE, 4096);
         int mincount = Math.max(this.req.getParams().getInt(GroupByComponent.Params.MINCOUNT, 1), 1);
         Double sum = 0D;
         Double itemValue = 0D;
