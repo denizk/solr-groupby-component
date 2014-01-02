@@ -17,7 +17,7 @@
 	    "transactions" : [
 	    	{
 		    	"quantity" : 1,
-		      	"amount" : 5.0,
+		      	"amount" : 2.99,
 		      	"upc" : "12341234",
 		      	"category" : "ENERGY DRINKS",
 		      	"subcategory" : "SUPPLIMENTS",
@@ -29,7 +29,7 @@
 	    ]
 	  },
 	  {
-	    "date" : 20130514,
+	    "date" : 20130522,
 	    "address" : {
 	      "state" : "FLORIDA",
 	      "city" : "TAMPA",
@@ -44,7 +44,7 @@
 	    "transactions" : [
 	    	{
 		    	"quantity" : 1,
-		      	"amount" : 5.0,
+		      	"amount" : 2.98,
 		      	"upc" : "12341234",
 		      	"category" : "ENERGY DRINKS",
 		      	"subcategory" : "SUPPLIMENTS",

@@ -61,7 +61,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
     /**
      * A simple test to verify that we can actually facet on a simple field and get back all values
-     * accross all documents, this is the same as faceting in regular solr.
+     * across all documents, this is the same as faceting in regular solr.
      * 
      * @throws Exception
      */
@@ -139,7 +139,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         assertEquals("1", nodes.item(1).getTextContent());
 
         nodes = xpath(xml, "//int[@name=\"11111111\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
-        assertEquals("10.0", nodes.item(0).getTextContent());
+        assertEquals("6.99", nodes.item(0).getTextContent());
     }
 
     /**
@@ -165,7 +165,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         assertEquals(2, nodes.getLength());
 
         nodes = xpath(xml, "//int[@name=\"11111111\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
-        assertEquals("10.0", nodes.item(0).getTextContent());
+        assertEquals("6.99", nodes.item(0).getTextContent());
     }
 
     /**
@@ -193,7 +193,10 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         assertEquals(2, nodes.getLength());
 
         nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
-        assertEquals("15.0", nodes.item(0).getTextContent());
+        assertEquals("9.97", nodes.item(0).getTextContent());
+        
+        nodes = xpath(xml, "//int[@name=\"MIAMI\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        assertEquals("2.99", nodes.item(0).getTextContent());
     }
 
     /**
@@ -299,11 +302,81 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         // rollup at TAMPA should be $10.00
         NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("15.0", nodes.item(0).getTextContent());
+        assertEquals("9.97", nodes.item(0).getTextContent());
         // rollup for energy drinks in TAMPA should be $7.00
         nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../arr[@name=\"noun:xact/product_category_name\"]/lst/int[@name=\"ENERGY DRINKS\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("12.0", nodes.item(0).getTextContent());
+        assertEquals("6.97", nodes.item(0).getTextContent().substring(0, 4));
+    }
+
+    /**
+     * Sanity check, no customizations, simple facet over purchase amount.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testSanityFacetCount() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set("facet.limit", Integer.MAX_VALUE);
+        p.set("facet.mincount", 1);
+        p.set("facet", true);
+        p.set("facet.field", "product_purchase_amount");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+
+        // if regular facets over entire index we should get 3:$5, 2:$2, 1:$1
+        NodeList nodes = xpath(xml, "//lst[@name=\"product_purchase_amount\"]/int");
+        assertEquals(5, nodes.getLength());
+        assertEquals("2", nodes.item(0).getTextContent());
+        assertEquals("2.0", nodes.item(0).getAttributes().getNamedItem("name").getTextContent());
+
+        assertEquals("1", nodes.item(1).getTextContent());
+        assertEquals("1.0", nodes.item(1).getAttributes().getNamedItem("name").getTextContent());
+
+        assertEquals("1", nodes.item(2).getTextContent());
+        assertEquals("1.99", nodes.item(2).getAttributes().getNamedItem("name").getTextContent());
+    }
+
+    /**
+     * Sanity check, no customizations, simple facet over purchase amount.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testSanityFacetCountWithFilter() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set("facet.limit", Integer.MAX_VALUE);
+        p.set("facet.mincount", 1);
+        p.set("facet", true);
+        p.set("fq", "product_category_name:\"ENERGY DRINKS\"");
+        p.set("facet.field", "product_purchase_amount");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+
+        // there should be 3 $5 energy drinks and 1 $2.0 energy drink
+        NodeList nodes = xpath(xml, "//lst[@name=\"product_purchase_amount\"]/int");
+        assertEquals(4, nodes.getLength());
+        assertEquals("1", nodes.item(0).getTextContent());
+        assertEquals("1.99", nodes.item(0).getAttributes().getNamedItem("name").getTextContent());
+
+        assertEquals("1", nodes.item(1).getTextContent());
+        assertEquals("2.0", nodes.item(1).getAttributes().getNamedItem("name").getTextContent());
+        
+        assertEquals("1", nodes.item(2).getTextContent());
+        assertEquals("2.98", nodes.item(2).getAttributes().getNamedItem("name").getTextContent());
+        
+        assertEquals("1", nodes.item(3).getTextContent());
+        assertEquals("2.99", nodes.item(3).getAttributes().getNamedItem("name").getTextContent());
     }
 
     /**
@@ -374,7 +447,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         NodeList nodes = xpath(xml, "//int[@name=\"order\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("20.0", nodes.item(0).getTextContent());
+        assertEquals("12.96", nodes.item(0).getTextContent());
     }
 
     /**
@@ -401,7 +474,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         NodeList nodes = xpath(xml, "//int[@name=\"11111111\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("10.0", nodes.item(0).getTextContent());
+        assertEquals("6.99", nodes.item(0).getTextContent());
     }
 
     /**
@@ -428,8 +501,9 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
     }
 
     /**
-     * In this example we expect to get back $15.00 spend as there is $10.00 of spend in TAMPA for shopper 1,
-     * and $5.00 of spend in shopper 2 (however; shopper 2 has other spend in other cities which should not count).
+     * In this example we expect to get back $15.00 spend as there is $10.00 of spend in TAMPA for
+     * shopper 1, and $5.00 of spend in shopper 2 (however; shopper 2 has other spend in other
+     * cities which should not count).
      * 
      * @throws Exception
      */
@@ -447,7 +521,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
-        
+
         NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
         assertEquals("15.0", nodes.item(0).getTextContent());
@@ -455,6 +529,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
     /**
      * Expected to fail...
+     * 
      * @throws Exception
      */
     @Test
@@ -464,20 +539,25 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         p.set("wt", "xml");
         p.set("rows", "0");
         p.set("indent", "true");
+        p.set("cache", "false");
         p.set(GroupByComponent.Params.GROUPBY, "noun:shopper/id,noun:xact/product_brand_name:RED BULL");
         p.add(GroupByComponent.Params.STATS, "noun:xact/product_purchase_amount");
-        p.add(GroupByComponent.Params.HAVING, "product_purchase_amount:[5 TO 10]");
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//int[@name=\"11111111\"]/../arr[@name=\"noun:xact/product_brand_name:RED BULL\"]/lst/lst/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("15.0", nodes.item(0).getTextContent());
+        assertEquals("1.99", nodes.item(0).getTextContent());
+
+        nodes = xpath(xml, "//int[@name=\"22222222\"]/../arr[@name=\"noun:xact/product_brand_name:RED BULL\"]/lst/lst/lst/double[@name=\"sum\"]");
+        assertEquals(1, nodes.getLength());
+        assertEquals("5.97", nodes.item(0).getTextContent().substring(0,4));
     }
-    
+
     /**
      * Expected to fail...
+     * 
      * @throws Exception
      */
     @Test
@@ -492,7 +572,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
-        
+
         NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
         assertEquals("15.0", nodes.item(0).getTextContent());
@@ -518,6 +598,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         assertTrue(c instanceof GroupByComponent);
         assertU(adoc(getConsumerDocument("/sample1.json")));
         assertU(adoc(getConsumerDocument("/sample2.json")));
+        //assertU(adoc(getConsumerDocument("/sample3.json")));
         assertU(commit());
     }
 }

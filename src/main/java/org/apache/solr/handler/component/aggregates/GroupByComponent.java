@@ -4,22 +4,32 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.lang.time.StopWatch;
+import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
+import org.apache.lucene.search.NumericRangeQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryWrapperFilter;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.search.join.FixedBitSetCachingWrapperFilter;
+import org.apache.lucene.search.join.ScoreMode;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
+import org.apache.lucene.search.join.ToParentBlockJoinQuery;
+import org.apache.solr.common.SolrException;
+import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.NamedList;
@@ -112,7 +122,7 @@ public class GroupByComponent extends SearchComponent {
         // TODO - "groupby having(*)"
         ModifiableSolrParams params = new ModifiableSolrParams(req.getParams());
         params.set("facet", true);
-        params.set("facet.limit", Integer.MAX_VALUE);
+        params.set("facet.limit", req.getParams().getInt(Params.LIMIT, Integer.MAX_VALUE));
         params.set("facet.missing", false);
         params.set("facet.mincount", req.getParams().getInt(Params.MINCOUNT, 1));
 
@@ -155,7 +165,7 @@ public class GroupByComponent extends SearchComponent {
 
         NamedList<Integer> facets = null;
 
-        ArrayList<String> parents = new ArrayList<String>();
+        LinkedList<String> parents = new LinkedList<String>();
 
         // TODO possible optimization, see what is being asked for
         // and limit docset back to just those docs with the implicitly
@@ -176,7 +186,7 @@ public class GroupByComponent extends SearchComponent {
 
             docs = req.getSearcher().getDocSet(q);
 
-            parents.add(blockQueryTerm[0] + ":" + blockQueryTerm[1]);
+            parents.add(field);
             facets = new SimpleFacets(req, docs, params).getTermCounts(fieldName);
         } else {
             docs = req.getSearcher().getDocSet(new WildcardQuery(new Term(field, "*")));
@@ -191,7 +201,7 @@ public class GroupByComponent extends SearchComponent {
     }
 
     @SuppressWarnings("unchecked")
-    private List<NamedList<Object>> collectChildren(String parentField, LinkedList<String> queue, SolrQueryRequest req, DocSet docs, SolrParams params, NamedList<Integer> parents, List<String> priorQueries, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
+    private List<NamedList<Object>> collectChildren(String parentField, LinkedList<String> queue, SolrQueryRequest req, DocSet docs, SolrParams params, NamedList<Integer> parents, LinkedList<String> priorQueries, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
         List<NamedList<Object>> results = new ArrayList<NamedList<Object>>(parents.size());
 
         String nextField = queue.pollFirst();
@@ -217,13 +227,19 @@ public class GroupByComponent extends SearchComponent {
 
                 for (String statField : params.getParams(Params.STATS)) {
                     String statFieldName = statField;
+                    
+                    System.out.println("Stat: " + parentField + " = [" + parent.getKey() + "] over [" + statField + "] ==================");
+                    
                     Query statQuery = getNestedBlockJoinQueryOrTermQuery(parentField, parent.getKey(), priorQueries, statField);
-                    System.out.println("stat =>" + statQuery);
                     DocSet statDocs = indexSearcher.getDocSet(statQuery);
                     
+                    
+                    System.out.println("Found " + statDocs.size() + " matching docs");
+                    
                     if (hasBlockJoinHint(statFieldName)) {
-                        statFieldName = statFieldName.split(BLOCK_JOIN_PATH_HINT)[1];
+                        statFieldName = statFieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
                     }
+                    
                     AggregationResult percentiles = new Aggregate(req, statDocs, statFieldName).sum();
                     if (predicates != null) {
                         for (Function<AggregationResult, Boolean> f : predicates) {
@@ -262,7 +278,6 @@ public class GroupByComponent extends SearchComponent {
 
             if (nextField != null) {
                 Query constrainQuery = getNestedBlockJoinQueryOrTermQuery(parentField, parent.getKey(), priorQueries, nextField);
-                System.out.println("contrain =>" + constrainQuery);
                 DocSet intersection = indexSearcher.getDocSet(constrainQuery);
 
                 NamedList<Integer> children;
@@ -272,20 +287,22 @@ public class GroupByComponent extends SearchComponent {
                     if (fieldName.indexOf(":") > -1) {
                         String[] filter = fieldName.split(":");
                         Query sub = new TermQuery(new Term(filter[0], filter[1]));
-                        intersection = indexSearcher.getDocSet(sub, intersection);
                         fieldName = filter[0];
+                        children = new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
+                    } else {
+                        children = new SimpleFacets(req, intersection, params).getTermCounts(fieldName);
                     }
-                    children = new SimpleFacets(req, intersection, params).getTermCounts(fieldName, intersection);
+                    
                 } else {
-                    children = new SimpleFacets(req, intersection, params).getTermCounts(nextField, intersection);
+                    children = new SimpleFacets(req, intersection, params).getTermCounts(nextField);
                 }
 
                 if (children.size() >= 0) {
-                    List<String> clone = Lists.newArrayList(priorQueries);
+                    LinkedList<String> clone = new LinkedList<String>(priorQueries);
                     if (hasBlockJoinHint(parentField)) {
-                        clone.add(parentField.split(BLOCK_JOIN_PATH_HINT)[0] + "/" + parentField.split(BLOCK_JOIN_PATH_HINT)[1] + ":" + parent.getKey());
+                        clone.add(parentField.split(BLOCK_JOIN_PATH_HINT)[0] + "/" + parentField.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0] + ":" + parent.getKey());
                     } else {
-                        clone.add(parentField + ":" + parent.getKey());
+                        clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
                     }
                     pivot.add(nextField, collectChildren(nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));
                 }
@@ -318,10 +335,47 @@ public class GroupByComponent extends SearchComponent {
      *            The field to check for a block join hint.
      * @return True if the field specified for group by has a block join hint.
      */
-    private boolean hasBlockJoinHint(String field) {
+    private static boolean hasBlockJoinHint(String field) {
         if (field == null)
             return false;
         return field.indexOf(BLOCK_JOIN_PATH_HINT) > -1;
+    }
+
+    private static String extractBlockJoinHint(String query) {
+        if (hasBlockJoinHint(query))
+            return query.split(BLOCK_JOIN_PATH_HINT)[0];
+        return null;
+    }
+
+    private static Query extractQuery(String term, String value) {
+        String field = term;
+        if (hasBlockJoinHint(term)) {
+            field = term.split(BLOCK_JOIN_PATH_HINT)[1];
+        }
+        if (field.indexOf(":") > -1) {
+            String[] keyValue = field.split(":");
+            field = keyValue[0];
+            String query = keyValue[1];
+            if (query.contains("*") && query.contains("[") && query.contains(" TO ")) {
+                // range query
+                Matcher matcher = Pattern.compile("\\[([\\-0-9\\.\\*]+)\\sTO\\s([\\-0-9\\.\\*]+)\\]").matcher(query);
+                if (false == matcher.find()) {
+                    Float min = matcher.group(1).equals("*") ? null : Float.parseFloat(matcher.group(1));
+                    Float max = matcher.group(2).equals("*") ? null : Float.parseFloat(matcher.group(2));
+                    return NumericRangeQuery.newFloatRange(field, min, max, true, true);
+                } else {
+                    throw new SolrException(ErrorCode.BAD_REQUEST, "Range query badly formed");
+                }
+            } else if (query.contains("*")) {
+                // wildcard
+                return new WildcardQuery(new Term(field, query));
+            } else {
+                // term
+                return new TermQuery(new Term(field, query));
+            }
+        }
+        System.out.println("wildcard: " + field);
+        return new WildcardQuery(new Term(field, null != value ? value : "*"));
     }
 
     /**
@@ -336,105 +390,109 @@ public class GroupByComponent extends SearchComponent {
      * @param parentTermValue
      * @return
      */
-    private Query getNestedBlockJoinQueryOrTermQuery(String termKey, String termValue, List<String> previousQueries, String nextField) {
+    private Query getNestedBlockJoinQueryOrTermQuery(String termKey, String termValue, LinkedList<String> previousQueries, String nextField) {
+               
+        LinkedHashMap<String, HashSet<String>> blockJoins = new LinkedHashMap<String, HashSet<String>>();
+        
+        System.out.println(previousQueries);
 
-        Set<String> parentBlockJoinHints = new HashSet<String>();
-        List<Query> parents = new ArrayList<Query>();
-        HashMap<String, List<Query>> blockJoins = new HashMap<String, List<Query>>();
-
-        if (previousQueries.size() > 0) {
-            for (String priorQuery : previousQueries) {
-
-                if (hasBlockJoinHint(priorQuery)) {
-                    String[] priorJoin = priorQuery.split(BLOCK_JOIN_PATH_HINT);
-                    String priorJoinHint = priorJoin[0];
-                    String[] priorQueryTerms = priorJoin[1].split(":");
-
-                    parentBlockJoinHints.add(priorJoinHint);
-                    if (!blockJoins.containsKey(priorJoinHint)) {
-                        blockJoins.put(priorJoinHint, new ArrayList<Query>());
-                    }
-                    TermQuery parentTermQuery = new TermQuery(new Term(priorQueryTerms[0], priorQueryTerms[1]));
-                    parents.add(parentTermQuery);
-                    blockJoins.get(priorJoinHint).add(parentTermQuery);
+        for (String priorQuery : previousQueries) {
+            String hint = extractBlockJoinHint(priorQuery);
+            if (hint != null) {
+                if (!blockJoins.containsKey(hint)) {
+                    blockJoins.put(hint, new HashSet<String>());
+                }
+                if (priorQuery.split(BLOCK_JOIN_PATH_HINT)[1].indexOf(":") > -1) {
+                    // remove all block joins at this level (we have most specific already)
+                    blockJoins.get(hint).clear();
+                    blockJoins.get(hint).add(priorQuery);
                 } else {
-                    String[] parentQueryTerms = priorQuery.split(":");
-                    TermQuery parentTermQuery = new TermQuery(new Term(parentQueryTerms[0], parentQueryTerms[1]));
-                    parents.add(parentTermQuery);
-                    parentBlockJoinHints.add(priorQuery);
-
-                    if (!blockJoins.containsKey(priorQuery)) {
-                        blockJoins.put(priorQuery, new ArrayList<Query>());
-                    }
-                    blockJoins.get(priorQuery).add(parentTermQuery);
+                    blockJoins.get(hint).add(hint);
                 }
             }
         }
 
-        Query termQuery;
-        String term = termKey;
-        if (hasBlockJoinHint(termKey)) {
-            String field = termKey.split(BLOCK_JOIN_PATH_HINT)[1];
-            term = field;
-        }
-        if (term.indexOf(":") > -1) { // check has nested select for constraints
-            String[] nestedTerms = term.split(":");
-            termQuery = new TermQuery(new Term(nestedTerms[0], nestedTerms[1]));
-            term = nestedTerms[0];
-        }
-        if (termValue != null) {
-            termQuery = new TermQuery(new Term(term, termValue));
-        } else {
-            termQuery = new TermQuery(new Term(term));
+        String childBlockJoinHint = extractBlockJoinHint(nextField);
+        // check that we aren't on same level as child...
+        int i = previousQueries.size() - 1;
+        String previousJoinHint = null;
+        while (previousJoinHint == null && i >= 0) {
+            previousJoinHint = extractBlockJoinHint(previousQueries.get(i));
+            i = i - 1;
         }
 
-        if (nextField != null && hasBlockJoinHint(nextField)) {
-            String nextFieldHint = nextField.split(BLOCK_JOIN_PATH_HINT)[0];
-            if (!parentBlockJoinHints.contains(nextFieldHint)) {
-                BooleanQuery wrap = new BooleanQuery();
-                for (String blockJoinKey : blockJoins.keySet()) {
-                    BooleanQuery parentTerms = new BooleanQuery();
-                    for (String q : parentBlockJoinHints) {
-                        parentTerms.add(new TermQuery(new Term(q.split(":")[0], q.split(":")[1])), Occur.MUST);
-                    }
-
-                    // the current query is at the same level as the next query so we can't run a
-                    // child block query
-                    // as the next field is on the same level and NOT a child so we keep it at the
-                    // current parent level
-                    if (hasBlockJoinHint(termKey) && termKey.split(BLOCK_JOIN_PATH_HINT)[0].equalsIgnoreCase(nextFieldHint)) {
-                        BooleanQuery child = new BooleanQuery();
-                        for (Query q : blockJoins.get(blockJoinKey)) {
-                            child.add(q, Occur.MUST);
-                        }
-                        CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(parentTerms));
-                        Query join = new ToChildBlockJoinQuery(child, filter, false);
-                        wrap.add(join, Occur.MUST);
-                        wrap.add(termQuery, Occur.MUST);
-                    } else {
-                        BooleanQuery child = new BooleanQuery();
-                        for (Query q : blockJoins.get(blockJoinKey)) {
-                            child.add(q, Occur.MUST);
-                        }
-                        child.add(termQuery, Occur.MUST);
-                        CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(parentTerms));
-                        Query join = new ToChildBlockJoinQuery(child, filter, false);
-                        wrap.add(join, Occur.MUST);
-                    }
+        BooleanQuery query = new BooleanQuery();
+        if (null != previousJoinHint) {
+            if (previousJoinHint.equalsIgnoreCase(childBlockJoinHint)) {
+                // we are querying at same level
+                for (String fq : blockJoins.get(previousJoinHint)) {
+                    query.add(extractQuery(fq, null), Occur.MUST);
                 }
-                return wrap;
+                query.add(extractQuery(termKey, termValue), Occur.MUST);
+            } else {
+                if (previousJoinHint.equalsIgnoreCase(extractBlockJoinHint(termKey))) {
+                    // this query being executed as at same level as prior parent
+                    // can we can assume more restrictive than parent?
+                    BooleanQuery q = new BooleanQuery();
+                    Query thisQuery = extractQuery(termKey, termValue);
+                    q.add(extractQuery(previousJoinHint, null), Occur.MUST);
+                    CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(q));
+                    query.add(new ToChildBlockJoinQuery(thisQuery, filter, false), Occur.MUST);
+                } else {
+                    BooleanQuery bq = new BooleanQuery();
+                    boolean isContinuationOfPriorQuery = false;
+                    
+                    // sanitize block joins if we have hints grab most specific and move on
+                    // noun:shopper vs noun:shopper/id:12341234 we should only use id:12341234
+                    
+                    for (String joinKey : blockJoins.keySet()) {
+                        if (joinKey.equalsIgnoreCase(extractBlockJoinHint(termKey))) {
+                            for (String fq : blockJoins.get(joinKey)) {
+                                bq.add(extractQuery(fq, null), Occur.MUST);
+                            }
+                            bq.add(extractQuery(termKey, termValue), Occur.MUST);
+                            isContinuationOfPriorQuery = true;
+                        } else if (joinKey.equalsIgnoreCase(extractBlockJoinHint(nextField))) {
+                            // ignore
+                        } else {
+                            BooleanQuery n = new BooleanQuery();
+                            for (String fq : blockJoins.get(joinKey)) {
+                                n.add(extractQuery(fq, null), Occur.MUST);
+                            }
+                            bq.add(n, Occur.MUST);
+                        }
+                    }
+                    
+                    Query scope = extractQuery(previousJoinHint, "");
+                    
+                    CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(scope));
+                    Query join = new ToChildBlockJoinQuery(bq, filter, false);
+                    
+                    query.add(join, Occur.MUST);
+                    query.add(extractQuery(termKey, termValue), Occur.MUST);
+                }
             }
-        }
-
-        BooleanQuery fq = new BooleanQuery();
-        if (previousQueries.size() > 0) {
-            for (Query q : parents) {
-                fq.add(q, Occur.MUST);
+        } else if (null != childBlockJoinHint && previousJoinHint == null) {
+            // this is first time we are looking at a child and
+            // we can assume everything before this has been a parent query
+            BooleanQuery q = new BooleanQuery();
+            for (String key : blockJoins.keySet()) {
+                for (String fq : blockJoins.get(key)) {
+                    q.add(extractQuery(fq, null), Occur.MUST);
+                }
             }
-            fq.add(termQuery, Occur.MUST);
+            CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(q));
+            query.add(new ToChildBlockJoinQuery(extractQuery(termKey, termValue), filter, false), Occur.MUST);
         } else {
-            fq.add(termQuery, Occur.MUST);
+            // no block join hints specified build regular solr query
+            for (String key : blockJoins.keySet()) {
+                for (String fq : blockJoins.get(key)) {
+                    query.add(extractQuery(fq, null), Occur.MUST);
+                }
+            }
+            query.add(extractQuery(termKey, termValue), Occur.MUST);
         }
-        return fq;
+        return query;
+        
     }
 }

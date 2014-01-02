@@ -3,6 +3,7 @@ package org.apache.solr.handler.component.test;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 
 /*
@@ -32,13 +33,15 @@ public class Order {
 
     public SolrInputDocument asDocument() {
         SolrInputDocument d = new SolrInputDocument();
+        SolrInputDocument last = null;
+        for (Transaction p : this.transactions) {
+            last = p.asDocument();
+            d.addChildDocument(last);
+        }
         d.setField("noun", "order");
         d.setField("order_date", date);
         d.setField("order_city_name", address.city);
         d.setField("order_state_name", address.state);
-        for (Transaction p : this.transactions) {
-            d.addChildDocument(p.asDocument());
-        }
         return d;
     }
 

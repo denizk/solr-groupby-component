@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.request.SimpleFacets;
 import org.apache.solr.request.SolrQueryRequest;
@@ -66,9 +67,13 @@ public class Aggregate {
     }
 
     private AggregationResult sum(String fieldName) throws IOException {
-        SimpleFacets facets = new SimpleFacets(this.req, base, this.req.getParams());
+        ModifiableSolrParams p = new ModifiableSolrParams(this.req.getParams());
+        p.set("facet.mincount", 1);
+        p.set("facet.limit", Integer.MAX_VALUE);
+        p.set("cache", "false");
+        SimpleFacets facets = new SimpleFacets(this.req, base, p);
 
-        NamedList<Integer> terms = facets.getTermCounts(fieldName, base);
+        NamedList<Integer> terms = facets.getTermCounts(fieldName);
 
         Double sum = 0D;
         Double itemValue = 0D;
@@ -89,6 +94,7 @@ public class Aggregate {
         }
 
         for (Map.Entry<String, Integer> parent : terms) {
+            System.out.println("\t Facet " + fieldName + ":" + parent.getKey() + " (" + parent.getValue() + ")");
             itemValue = Double.parseDouble(parent.getKey());
             sum += itemValue * parent.getValue();
             count += parent.getValue();

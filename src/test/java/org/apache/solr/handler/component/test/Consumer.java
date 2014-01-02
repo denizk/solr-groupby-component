@@ -30,11 +30,11 @@ public class Consumer {
 
     public SolrInputDocument asDocument() {
         SolrInputDocument d = new SolrInputDocument();
-        d.setField("noun", "shopper");
-        d.setField("id", id);
         for (Order o : this.orders) {
             d.addChildDocument(o.asDocument());
         }
+        d.setField("noun", "shopper");
+        d.setField("id", id);
         return d;
     }
 }

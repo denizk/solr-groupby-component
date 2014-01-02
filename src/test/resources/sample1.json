@@ -18,7 +18,7 @@
 	    "transactions" : [
 	    	{
 		    	"quantity" : 1,
-		      	"amount" : 5.0,
+		      	"amount" : 1.99,
 		      	"upc" : "12341234",
 		      	"category" : "ENERGY DRINKS",
 		      	"subcategory" : "SUPPLIMENTS",
