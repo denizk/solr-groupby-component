@@ -573,9 +573,10 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
-        assertEquals(1, nodes.getLength());
-        assertEquals("15.0", nodes.item(0).getTextContent());
+        NodeList nodes = xpath(xml, "//arr[@name=\"noun:xact/product_brand_name:R*\"]/lst/lst/lst/double[@name=\"sum\"]");
+        assertEquals(2, nodes.getLength());
+        assertEquals("1.99", nodes.item(0).getTextContent());
+        assertEquals("5.97", nodes.item(1).getTextContent().substring(0,4));
     }
 
     private NodeList xpath(String xml, String xpath) throws SAXException, IOException, XPathExpressionException {

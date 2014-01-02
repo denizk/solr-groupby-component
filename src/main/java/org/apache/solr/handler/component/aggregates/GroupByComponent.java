@@ -285,8 +285,8 @@ public class GroupByComponent extends SearchComponent {
                     String fieldName = nextField.split(BLOCK_JOIN_PATH_HINT)[1];
                     // has constraint filter
                     if (fieldName.indexOf(":") > -1) {
-                        String[] filter = fieldName.split(":");
-                        Query sub = new TermQuery(new Term(filter[0], filter[1]));
+                        String[] filter = fieldName.split(":");                       
+                        Query sub =  extractQuery(fieldName, null);//new TermQuery(new Term(filter[0], filter[1]));
                         fieldName = filter[0];
                         children = new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
                     } else {
