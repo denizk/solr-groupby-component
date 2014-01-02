@@ -3,7 +3,6 @@ package org.apache.solr.handler.component.test;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.solr.common.SolrDocument;
 import org.apache.solr.common.SolrInputDocument;
 
 /*

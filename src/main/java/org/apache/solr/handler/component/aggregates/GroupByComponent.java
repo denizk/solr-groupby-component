@@ -2,19 +2,14 @@ package org.apache.solr.handler.component.aggregates;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.commons.lang.time.StopWatch;
-import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
@@ -25,9 +20,7 @@ import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.BooleanClause.Occur;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.search.join.FixedBitSetCachingWrapperFilter;
-import org.apache.lucene.search.join.ScoreMode;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
-import org.apache.lucene.search.join.ToParentBlockJoinQuery;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.ModifiableSolrParams;
@@ -81,6 +74,8 @@ public class GroupByComponent extends SearchComponent {
         public static final String STATS = "groupby.stats";
 
         public static final String LIMIT = "groupby.limit";
+        
+        public static final String SIZE = "groupby.size";
 
         public static final String MINCOUNT = "groupby.mincount";
 
@@ -143,14 +138,10 @@ public class GroupByComponent extends SearchComponent {
 
         List<NamedList<Object>> pivot = new ArrayList<NamedList<Object>>();
         for (String groupByArg : groupByArgs) {
-            StopWatch timer = new StopWatch();
-            timer.start();
             String[] groupByFields = groupByArg.split(",");
             LinkedList<String> queue = new LinkedList<String>();
             queue.addAll(Lists.newArrayList(groupByFields));
             pivot.add(collect(queue, req, params, predicates));
-            timer.stop();
-            debug.add("groupby." + groupByArg + "/ms", timer.getTime());
         }
         rb.rsp.add("groups", pivot);
 
@@ -180,8 +171,9 @@ public class GroupByComponent extends SearchComponent {
             String fieldName = field.split(BLOCK_JOIN_PATH_HINT)[1];
             if (fieldName.indexOf(":") > -1) {
                 String[] pair = fieldName.split(":");
+                Query query = extractQuery(fieldName, null);
                 fieldName = pair[0];
-                q.add(new TermQuery(new Term(pair[0], pair[1])), Occur.MUST);
+                q.add(query, Occur.MUST);
             }
 
             docs = req.getSearcher().getDocSet(q);
@@ -206,15 +198,11 @@ public class GroupByComponent extends SearchComponent {
 
         String nextField = queue.pollFirst();
         SolrIndexSearcher indexSearcher = req.getSearcher();
-        boolean debugEnabled = req.getParams().getBool(Params.DEBUG, false);
 
         for (Map.Entry<String, Integer> parent : parents) {
             if (parent.getValue() <= 0) {
                 continue; // do not collect children when parent is 0
             }
-
-            StopWatch x = new StopWatch();
-            x.start();
 
             SimpleOrderedMap<Object> pivot = new SimpleOrderedMap<Object>();
             pivot.add(parent.getKey(), parent.getValue());
@@ -222,24 +210,17 @@ public class GroupByComponent extends SearchComponent {
             boolean skip = false;
             if (params.getParams(Params.STATS) != null) {
                 NamedList<Object> stats = new NamedList<Object>();
-                StopWatch w = new StopWatch();
-                w.start();
 
                 for (String statField : params.getParams(Params.STATS)) {
                     String statFieldName = statField;
-                    
-                    System.out.println("Stat: " + parentField + " = [" + parent.getKey() + "] over [" + statField + "] ==================");
-                    
+
                     Query statQuery = getNestedBlockJoinQueryOrTermQuery(parentField, parent.getKey(), priorQueries, statField);
                     DocSet statDocs = indexSearcher.getDocSet(statQuery);
-                    
-                    
-                    System.out.println("Found " + statDocs.size() + " matching docs");
-                    
+
                     if (hasBlockJoinHint(statFieldName)) {
                         statFieldName = statFieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
                     }
-                    
+
                     AggregationResult percentiles = new Aggregate(req, statDocs, statFieldName).sum();
                     if (predicates != null) {
                         for (Function<AggregationResult, Boolean> f : predicates) {
@@ -265,15 +246,11 @@ public class GroupByComponent extends SearchComponent {
                     }
                     stats.add(statFieldName, n);
                 }
-                w.stop();
 
                 if (skip) {
                     continue;
                 }
                 pivot.add("stats", stats);
-                if (debugEnabled) {
-                    stats.add("groupby.debug", w.getTime());
-                }
             }
 
             if (nextField != null) {
@@ -285,14 +262,15 @@ public class GroupByComponent extends SearchComponent {
                     String fieldName = nextField.split(BLOCK_JOIN_PATH_HINT)[1];
                     // has constraint filter
                     if (fieldName.indexOf(":") > -1) {
-                        String[] filter = fieldName.split(":");                       
-                        Query sub =  extractQuery(fieldName, null);//new TermQuery(new Term(filter[0], filter[1]));
+                        String[] filter = fieldName.split(":");
+                        Query sub = extractQuery(fieldName, null);// new TermQuery(new
+                                                                  // Term(filter[0], filter[1]));
                         fieldName = filter[0];
                         children = new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
                     } else {
                         children = new SimpleFacets(req, intersection, params).getTermCounts(fieldName);
                     }
-                    
+
                 } else {
                     children = new SimpleFacets(req, intersection, params).getTermCounts(nextField);
                 }
@@ -308,10 +286,6 @@ public class GroupByComponent extends SearchComponent {
                 }
             }
 
-            x.stop();
-            if (debugEnabled) {
-                pivot.add("groupby.debug", x.getTime());
-            }
             results.add(pivot);
         }
 
@@ -374,7 +348,6 @@ public class GroupByComponent extends SearchComponent {
                 return new TermQuery(new Term(field, query));
             }
         }
-        System.out.println("wildcard: " + field);
         return new WildcardQuery(new Term(field, null != value ? value : "*"));
     }
 
@@ -391,10 +364,8 @@ public class GroupByComponent extends SearchComponent {
      * @return
      */
     private Query getNestedBlockJoinQueryOrTermQuery(String termKey, String termValue, LinkedList<String> previousQueries, String nextField) {
-               
+
         LinkedHashMap<String, HashSet<String>> blockJoins = new LinkedHashMap<String, HashSet<String>>();
-        
-        System.out.println(previousQueries);
 
         for (String priorQuery : previousQueries) {
             String hint = extractBlockJoinHint(priorQuery);
@@ -440,18 +411,16 @@ public class GroupByComponent extends SearchComponent {
                     query.add(new ToChildBlockJoinQuery(thisQuery, filter, false), Occur.MUST);
                 } else {
                     BooleanQuery bq = new BooleanQuery();
-                    boolean isContinuationOfPriorQuery = false;
-                    
+
                     // sanitize block joins if we have hints grab most specific and move on
                     // noun:shopper vs noun:shopper/id:12341234 we should only use id:12341234
-                    
+
                     for (String joinKey : blockJoins.keySet()) {
                         if (joinKey.equalsIgnoreCase(extractBlockJoinHint(termKey))) {
                             for (String fq : blockJoins.get(joinKey)) {
                                 bq.add(extractQuery(fq, null), Occur.MUST);
                             }
                             bq.add(extractQuery(termKey, termValue), Occur.MUST);
-                            isContinuationOfPriorQuery = true;
                         } else if (joinKey.equalsIgnoreCase(extractBlockJoinHint(nextField))) {
                             // ignore
                         } else {
@@ -462,12 +431,12 @@ public class GroupByComponent extends SearchComponent {
                             bq.add(n, Occur.MUST);
                         }
                     }
-                    
+
                     Query scope = extractQuery(previousJoinHint, "");
-                    
+
                     CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(scope));
                     Query join = new ToChildBlockJoinQuery(bq, filter, false);
-                    
+
                     query.add(join, Occur.MUST);
                     query.add(extractQuery(termKey, termValue), Occur.MUST);
                 }
@@ -493,6 +462,6 @@ public class GroupByComponent extends SearchComponent {
             query.add(extractQuery(termKey, termValue), Occur.MUST);
         }
         return query;
-        
+
     }
 }

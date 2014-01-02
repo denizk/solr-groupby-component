@@ -27,7 +27,6 @@
 
   <query>
     <maxBooleanClauses>1024</maxBooleanClauses>
-    <!-- 
     <filterCache
       class="solr.search.FastLRUCache"
       size="512"
@@ -47,7 +46,7 @@
       class="solr.search.LRUCache"
       size="10"
       initialSize="0"
-      autowarmCount="10" />-->
+      autowarmCount="10" />
     <enableLazyFieldLoading>true</enableLazyFieldLoading>
     <queryResultWindowSize>10</queryResultWindowSize>
   </query>

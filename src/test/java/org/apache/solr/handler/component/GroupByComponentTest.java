@@ -524,7 +524,23 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("15.0", nodes.item(0).getTextContent());
+        assertEquals("9.97", nodes.item(0).getTextContent().substring(0,4));
+    }
+    
+    @Test
+    public void testComplexDrillPath() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set(GroupByComponent.Params.GROUPBY, "noun:shopper/id,noun:order/order_state_name:F*,noun:order/order_city_name:TAMPA,noun:xact/product_brand_name:R*");
+        p.add(GroupByComponent.Params.STATS, "noun:xact/product_purchase_amount");
+        p.set(GroupByComponent.Params.PERCENTILES, "25,50,75");
+        p.set(GroupByComponent.Params.PERCENTILES_COMPRESSION, "1000");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
     }
 
     /**
