@@ -58,13 +58,11 @@ import com.google.common.collect.Lists;
 
 public class GroupByComponent extends SearchComponent {
 
-    private static Logger log = LoggerFactory.getLogger(GroupByComponent.class);
+    private static final Logger log = LoggerFactory.getLogger(GroupByComponent.class);
 
     public static final String COMPONENT_NAME = "groupby";
 
     private static final String BLOCK_JOIN_PATH_HINT = "/";
-
-    private static volatile int totalRequests = 0;
 
     public static class Params {
         public static final String GROUPBY = "groupby";
@@ -105,9 +103,6 @@ public class GroupByComponent extends SearchComponent {
         if (rb.req.getParams().get(Params.GROUPBY, "").isEmpty()) {
             return;
         }
-
-        // track total requests for stats in admin panel
-        totalRequests = totalRequests + 1;
 
         SolrQueryRequest req = rb.req;
 
