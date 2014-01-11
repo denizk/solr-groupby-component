@@ -33,7 +33,7 @@
    <!-- holds our hierarchy definition for block joins -->
    <field name="noun" type="string" indexed="true" stored="false" required="true" />
 
-   <dynamicField name="*_date"  type="string"  indexed="true"  stored="false" multiValued="false"/>
+   <dynamicField name="*_date"  type="tdate"  indexed="true"  stored="false" multiValued="false"/>
    <dynamicField name="*_name"  type="string"  indexed="true"  stored="false" multiValued="false"/>
    <dynamicField name="*_amount"  type="float"  indexed="true"  stored="false" multiValued="false"/>
    <dynamicField name="*_total"  type="float"  indexed="true"  stored="false" multiValued="false"/>

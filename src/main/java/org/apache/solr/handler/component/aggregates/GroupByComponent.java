@@ -1,7 +1,9 @@
 package org.apache.solr.handler.component.aggregates;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -10,7 +12,16 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
+import org.apache.lucene.document.DateTools;
+import org.apache.lucene.document.DateTools.Resolution;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.queryparser.classic.QueryParserBase;
+import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
+import org.apache.lucene.queryparser.flexible.standard.QueryParserUtil;
+import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
+import org.apache.lucene.queryparser.xml.builders.NumericRangeQueryBuilder;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
 import org.apache.lucene.search.NumericRangeQuery;
@@ -18,19 +29,27 @@ import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryWrapperFilter;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.search.join.FixedBitSetCachingWrapperFilter;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
+import org.apache.lucene.util.BytesRef;
+import org.apache.lucene.util.Version;
 import org.apache.solr.common.SolrException;
 import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
+import org.apache.solr.common.util.DateUtil;
 import org.apache.solr.common.util.NamedList;
 import org.apache.solr.common.util.SimpleOrderedMap;
 import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SimpleFacets;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.DateField;
+import org.apache.solr.schema.FieldType;
+import org.apache.solr.schema.IndexSchema;
+import org.apache.solr.schema.TrieDateField;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.slf4j.Logger;
@@ -150,6 +169,7 @@ public class GroupByComponent extends SearchComponent {
         String field = queue.removeFirst();
 
         NamedList<Integer> facets = null;
+        IndexSchema schema = req.getSearcher().getSchema();
 
         LinkedList<String> parents = new LinkedList<String>();
 
@@ -166,7 +186,7 @@ public class GroupByComponent extends SearchComponent {
             String fieldName = field.split(BLOCK_JOIN_PATH_HINT)[1];
             if (fieldName.indexOf(":") > -1) {
                 String[] pair = fieldName.split(":");
-                Query query = extractQuery(fieldName, null);
+                Query query = extractQuery(schema, fieldName, null);
                 fieldName = pair[0];
                 q.add(query, Occur.MUST);
             }
@@ -182,13 +202,13 @@ public class GroupByComponent extends SearchComponent {
 
         SimpleOrderedMap<Object> results = new SimpleOrderedMap<Object>();
 
-        results.add(field, collectChildren(field, queue, req, docs, params, facets, parents, predicates));
+        results.add(field, collectChildren(schema, field, queue, req, docs, params, facets, parents, predicates));
 
         return results;
     }
 
     @SuppressWarnings("unchecked")
-    private List<NamedList<Object>> collectChildren(String parentField, LinkedList<String> queue, SolrQueryRequest req, DocSet docs, SolrParams params, NamedList<Integer> parents, LinkedList<String> priorQueries, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
+    private List<NamedList<Object>> collectChildren(IndexSchema schema, String parentField, LinkedList<String> queue, SolrQueryRequest req, DocSet docs, SolrParams params, NamedList<Integer> parents, LinkedList<String> priorQueries, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
         List<NamedList<Object>> results = new ArrayList<NamedList<Object>>(parents.size());
 
         String nextField = queue.pollFirst();
@@ -209,7 +229,7 @@ public class GroupByComponent extends SearchComponent {
                 for (String statField : params.getParams(Params.STATS)) {
                     String statFieldName = statField;
 
-                    Query statQuery = getNestedBlockJoinQueryOrTermQuery(parentField, parent.getKey(), priorQueries, statField);
+                    Query statQuery = getNestedBlockJoinQueryOrTermQuery(schema, parentField, parent.getKey(), priorQueries, statField);
                     DocSet statDocs = indexSearcher.getDocSet(statQuery);
 
                     if (hasBlockJoinHint(statFieldName)) {
@@ -249,7 +269,7 @@ public class GroupByComponent extends SearchComponent {
             }
 
             if (nextField != null) {
-                Query constrainQuery = getNestedBlockJoinQueryOrTermQuery(parentField, parent.getKey(), priorQueries, nextField);
+                Query constrainQuery = getNestedBlockJoinQueryOrTermQuery(schema, parentField, parent.getKey(), priorQueries, nextField);
                 DocSet intersection = indexSearcher.getDocSet(constrainQuery);
 
                 NamedList<Integer> children;
@@ -258,7 +278,7 @@ public class GroupByComponent extends SearchComponent {
                     // has constraint filter
                     if (fieldName.indexOf(":") > -1) {
                         String[] filter = fieldName.split(":");
-                        Query sub = extractQuery(fieldName, null);// new TermQuery(new
+                        Query sub = extractQuery(schema, fieldName, null);// new TermQuery(new
                                                                   // Term(filter[0], filter[1]));
                         fieldName = filter[0];
                         children = new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
@@ -277,7 +297,7 @@ public class GroupByComponent extends SearchComponent {
                     } else {
                         clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
                     }
-                    pivot.add(nextField, collectChildren(nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));
+                    pivot.add(nextField, collectChildren(schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));
                 }
             }
 
@@ -315,8 +335,16 @@ public class GroupByComponent extends SearchComponent {
             return query.split(BLOCK_JOIN_PATH_HINT)[0];
         return null;
     }
+    
+    private static Date tryParseDate(String query) {
+        try {
+            return DateUtil.parseDate(query);
+        } catch (ParseException e) {
+            return null;
+        }
+    }
 
-    private static Query extractQuery(String term, String value) {
+    private static Query extractQuery(IndexSchema schema, String term, String value) {
         String field = term;
         if (hasBlockJoinHint(term)) {
             field = term.split(BLOCK_JOIN_PATH_HINT)[1];
@@ -338,12 +366,23 @@ public class GroupByComponent extends SearchComponent {
             } else if (query.contains("*")) {
                 // wildcard
                 return new WildcardQuery(new Term(field, query));
+            } else if (null != tryParseDate(query)) {
+                Date dt = tryParseDate(query);
+                String queryValue = DateTools.dateToString(dt, Resolution.DAY);
+                return new TermQuery(new Term(field, queryValue));
             } else {
-                // term
+             // term
                 return new TermQuery(new Term(field, query));
             }
         }
-        return new WildcardQuery(new Term(field, null != value ? value : "*"));
+        if (null != tryParseDate(value)) {
+            if (schema.getField(field).getType() instanceof TrieDateField) {
+                return new TrieDateField().getFieldQuery(null, schema.getField(field), value);
+            }
+            throw new RuntimeException("Can not group on date field not a TrieDateField");
+        } else {
+            return new WildcardQuery(new Term(field, null != value ? value : "*"));
+        }
     }
 
     /**
@@ -358,7 +397,7 @@ public class GroupByComponent extends SearchComponent {
      * @param parentTermValue
      * @return
      */
-    private Query getNestedBlockJoinQueryOrTermQuery(String termKey, String termValue, LinkedList<String> previousQueries, String nextField) {
+    private Query getNestedBlockJoinQueryOrTermQuery(IndexSchema schema, String termKey, String termValue, LinkedList<String> previousQueries, String nextField) {
 
         LinkedHashMap<String, HashSet<String>> blockJoins = new LinkedHashMap<String, HashSet<String>>();
 
@@ -392,16 +431,16 @@ public class GroupByComponent extends SearchComponent {
             if (previousJoinHint.equalsIgnoreCase(childBlockJoinHint)) {
                 // we are querying at same level
                 for (String fq : blockJoins.get(previousJoinHint)) {
-                    query.add(extractQuery(fq, null), Occur.MUST);
+                    query.add(extractQuery(schema, fq, null), Occur.MUST);
                 }
-                query.add(extractQuery(termKey, termValue), Occur.MUST);
+                query.add(extractQuery(schema, termKey, termValue), Occur.MUST);
             } else {
                 if (previousJoinHint.equalsIgnoreCase(extractBlockJoinHint(termKey))) {
                     // this query being executed as at same level as prior parent
                     // can we can assume more restrictive than parent?
                     BooleanQuery q = new BooleanQuery();
-                    Query thisQuery = extractQuery(termKey, termValue);
-                    q.add(extractQuery(previousJoinHint, null), Occur.MUST);
+                    Query thisQuery = extractQuery(schema, termKey, termValue);
+                    q.add(extractQuery(schema, previousJoinHint, null), Occur.MUST);
                     CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(q));
                     query.add(new ToChildBlockJoinQuery(thisQuery, filter, false), Occur.MUST);
                 } else {
@@ -413,27 +452,27 @@ public class GroupByComponent extends SearchComponent {
                     for (String joinKey : blockJoins.keySet()) {
                         if (joinKey.equalsIgnoreCase(extractBlockJoinHint(termKey))) {
                             for (String fq : blockJoins.get(joinKey)) {
-                                bq.add(extractQuery(fq, null), Occur.MUST);
+                                bq.add(extractQuery(schema, fq, null), Occur.MUST);
                             }
-                            bq.add(extractQuery(termKey, termValue), Occur.MUST);
+                            bq.add(extractQuery(schema, termKey, termValue), Occur.MUST);
                         } else if (joinKey.equalsIgnoreCase(extractBlockJoinHint(nextField))) {
                             // ignore
                         } else {
                             BooleanQuery n = new BooleanQuery();
                             for (String fq : blockJoins.get(joinKey)) {
-                                n.add(extractQuery(fq, null), Occur.MUST);
+                                n.add(extractQuery(schema, fq, null), Occur.MUST);
                             }
                             bq.add(n, Occur.MUST);
                         }
                     }
 
-                    Query scope = extractQuery(previousJoinHint, "");
+                    Query scope = extractQuery(schema, previousJoinHint, "");
 
                     CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(scope));
                     Query join = new ToChildBlockJoinQuery(bq, filter, false);
 
                     query.add(join, Occur.MUST);
-                    query.add(extractQuery(termKey, termValue), Occur.MUST);
+                    query.add(extractQuery(schema, termKey, termValue), Occur.MUST);
                 }
             }
         } else if (null != childBlockJoinHint && previousJoinHint == null) {
@@ -442,19 +481,19 @@ public class GroupByComponent extends SearchComponent {
             BooleanQuery q = new BooleanQuery();
             for (String key : blockJoins.keySet()) {
                 for (String fq : blockJoins.get(key)) {
-                    q.add(extractQuery(fq, null), Occur.MUST);
+                    q.add(extractQuery(schema, fq, null), Occur.MUST);
                 }
             }
             CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(q));
-            query.add(new ToChildBlockJoinQuery(extractQuery(termKey, termValue), filter, false), Occur.MUST);
+            query.add(new ToChildBlockJoinQuery(extractQuery(schema, termKey, termValue), filter, false), Occur.MUST);
         } else {
             // no block join hints specified build regular solr query
             for (String key : blockJoins.keySet()) {
                 for (String fq : blockJoins.get(key)) {
-                    query.add(extractQuery(fq, null), Occur.MUST);
+                    query.add(extractQuery(schema, fq, null), Occur.MUST);
                 }
             }
-            query.add(extractQuery(termKey, termValue), Occur.MUST);
+            query.add(extractQuery(schema, termKey, termValue), Occur.MUST);
         }
         return query;
 

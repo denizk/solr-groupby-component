@@ -3,7 +3,7 @@
   "id" : 11111111,
   "orders" : [ 
 	  {
-	    "date" : 20130407,
+	    "date" : "2013-04-07T12:00:00Z",
 	    "address" : {
 	      "state" : "FLORIDA",
 	      "city" : "TAMPA",

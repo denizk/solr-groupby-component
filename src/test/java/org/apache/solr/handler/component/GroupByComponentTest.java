@@ -308,6 +308,21 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         assertEquals(1, nodes.getLength());
         assertEquals("6.97", nodes.item(0).getTextContent().substring(0, 4));
     }
+    
+    @Test
+    public void testGroupByDateAndSum() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set(GroupByComponent.Params.GROUPBY, "noun:order/order_date");
+        p.set(GroupByComponent.Params.STATS, "noun:xact/product_purchase_amount");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+
+    }
 
     /**
      * Sanity check, no customizations, simple facet over purchase amount.
