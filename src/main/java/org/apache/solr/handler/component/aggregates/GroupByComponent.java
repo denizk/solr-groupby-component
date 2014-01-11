@@ -12,7 +12,9 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.lucene.analysis.core.KeywordAnalyzer;
 import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
+import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.DateTools;
 import org.apache.lucene.document.DateTools.Resolution;
 import org.apache.lucene.index.Term;
@@ -353,26 +355,14 @@ public class GroupByComponent extends SearchComponent {
             String[] keyValue = field.split(":");
             field = keyValue[0];
             String query = keyValue[1];
-            if (query.contains("*") && query.contains("[") && query.contains(" TO ")) {
-                // range query
-                Matcher matcher = Pattern.compile("\\[([\\-0-9\\.\\*]+)\\sTO\\s([\\-0-9\\.\\*]+)\\]").matcher(query);
-                if (false == matcher.find()) {
-                    Float min = matcher.group(1).equals("*") ? null : Float.parseFloat(matcher.group(1));
-                    Float max = matcher.group(2).equals("*") ? null : Float.parseFloat(matcher.group(2));
-                    return NumericRangeQuery.newFloatRange(field, min, max, true, true);
-                } else {
-                    throw new SolrException(ErrorCode.BAD_REQUEST, "Range query badly formed");
-                }
-            } else if (query.contains("*")) {
-                // wildcard
-                return new WildcardQuery(new Term(field, query));
-            } else if (null != tryParseDate(query)) {
-                Date dt = tryParseDate(query);
-                String queryValue = DateTools.dateToString(dt, Resolution.DAY);
-                return new TermQuery(new Term(field, queryValue));
-            } else {
-             // term
-                return new TermQuery(new Term(field, query));
+            
+            QueryParser queryParser = new QueryParser(Version.LUCENE_45, field, schema.getQueryAnalyzer());
+            queryParser.setAllowLeadingWildcard(true);
+            queryParser.setLowercaseExpandedTerms(false);
+            try {
+                return queryParser.parse(query);
+            } catch (org.apache.lucene.queryparser.classic.ParseException e) {
+                throw new RuntimeException(e);
             }
         }
         if (null != tryParseDate(value)) {

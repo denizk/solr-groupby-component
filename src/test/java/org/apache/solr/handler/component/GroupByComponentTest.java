@@ -571,17 +571,17 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         p.set("rows", "0");
         p.set("indent", "true");
         p.set("cache", "false");
-        p.set(GroupByComponent.Params.GROUPBY, "noun:shopper/id,noun:xact/product_brand_name:RED BULL");
+        p.set(GroupByComponent.Params.GROUPBY, "noun:shopper/id,noun:xact/product_brand_name:\"RED BULL\"");
         p.add(GroupByComponent.Params.STATS, "noun:xact/product_purchase_amount");
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"11111111\"]/../arr[@name=\"noun:xact/product_brand_name:RED BULL\"]/lst/lst/lst/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//int[@name=\"11111111\"]/../arr/lst/lst/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
         assertEquals("1.99", nodes.item(0).getTextContent());
 
-        nodes = xpath(xml, "//int[@name=\"22222222\"]/../arr[@name=\"noun:xact/product_brand_name:RED BULL\"]/lst/lst/lst/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//int[@name=\"22222222\"]/../arr/lst/lst/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
         assertEquals("5.97", nodes.item(0).getTextContent().substring(0,4));
     }
