@@ -194,7 +194,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals("9.97", nodes.item(0).getTextContent());
-        
+
         nodes = xpath(xml, "//int[@name=\"MIAMI\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals("2.99", nodes.item(0).getTextContent());
     }
@@ -308,7 +308,12 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         assertEquals(1, nodes.getLength());
         assertEquals("6.97", nodes.item(0).getTextContent().substring(0, 4));
     }
-    
+
+    /**
+     * Ensure that we can pivot over date fields and get a resonable result.
+     * 
+     * @throws Exception
+     */
     @Test
     public void testGroupByDateAndSum() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
@@ -322,6 +327,17 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
+        NodeList nodes = xpath(xml, "//int[@name=\"2013-04-07T12:00:00Z\"]/../lst/lst/double[@name=\"sum\"]");
+        assertEquals(1, nodes.getLength());
+        assertEquals("6.99", nodes.item(0).getTextContent());
+
+        nodes = xpath(xml, "//int[@name=\"2013-05-14T12:00:00Z\"]/../lst/lst/double[@name=\"sum\"]");
+        assertEquals(1, nodes.getLength());
+        assertEquals("2.99", nodes.item(0).getTextContent());
+
+        nodes = xpath(xml, "//int[@name=\"2013-05-22T12:00:00Z\"]/../lst/lst/double[@name=\"sum\"]");
+        assertEquals(1, nodes.getLength());
+        assertEquals("2.98", nodes.item(0).getTextContent());
     }
 
     /**
@@ -386,10 +402,10 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         assertEquals("1", nodes.item(1).getTextContent());
         assertEquals("2.0", nodes.item(1).getAttributes().getNamedItem("name").getTextContent());
-        
+
         assertEquals("1", nodes.item(2).getTextContent());
         assertEquals("2.98", nodes.item(2).getAttributes().getNamedItem("name").getTextContent());
-        
+
         assertEquals("1", nodes.item(3).getTextContent());
         assertEquals("2.99", nodes.item(3).getAttributes().getNamedItem("name").getTextContent());
     }
@@ -539,9 +555,9 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("9.97", nodes.item(0).getTextContent().substring(0,4));
+        assertEquals("9.97", nodes.item(0).getTextContent().substring(0, 4));
     }
-    
+
     @Test
     public void testComplexDrillPath() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
@@ -583,7 +599,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         nodes = xpath(xml, "//int[@name=\"22222222\"]/../arr/lst/lst/lst/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
-        assertEquals("5.97", nodes.item(0).getTextContent().substring(0,4));
+        assertEquals("5.97", nodes.item(0).getTextContent().substring(0, 4));
     }
 
     /**
@@ -607,7 +623,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         NodeList nodes = xpath(xml, "//arr[@name=\"noun:xact/product_brand_name:R*\"]/lst/lst/lst/double[@name=\"sum\"]");
         assertEquals(2, nodes.getLength());
         assertEquals("1.99", nodes.item(0).getTextContent());
-        assertEquals("5.97", nodes.item(1).getTextContent().substring(0,4));
+        assertEquals("5.97", nodes.item(1).getTextContent().substring(0, 4));
     }
 
     private NodeList xpath(String xml, String xpath) throws SAXException, IOException, XPathExpressionException {
@@ -630,7 +646,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         assertTrue(c instanceof GroupByComponent);
         assertU(adoc(getConsumerDocument("/sample1.json")));
         assertU(adoc(getConsumerDocument("/sample2.json")));
-        //assertU(adoc(getConsumerDocument("/sample3.json")));
+        // assertU(adoc(getConsumerDocument("/sample3.json")));
         assertU(commit());
     }
 }
