@@ -9,36 +9,18 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import org.apache.lucene.analysis.core.KeywordAnalyzer;
-import org.apache.lucene.analysis.core.WhitespaceAnalyzer;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
-import org.apache.lucene.document.DateTools;
-import org.apache.lucene.document.DateTools.Resolution;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.queryparser.classic.QueryParserBase;
-import org.apache.lucene.queryparser.flexible.core.QueryNodeException;
-import org.apache.lucene.queryparser.flexible.standard.QueryParserUtil;
-import org.apache.lucene.queryparser.flexible.standard.StandardQueryParser;
-import org.apache.lucene.queryparser.xml.builders.NumericRangeQueryBuilder;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
-import org.apache.lucene.search.NumericRangeQuery;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryWrapperFilter;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.BooleanClause.Occur;
-import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.search.join.FixedBitSetCachingWrapperFilter;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
-import org.apache.lucene.util.BytesRef;
 import org.apache.lucene.util.Version;
-import org.apache.solr.common.SolrException;
-import org.apache.solr.common.SolrException.ErrorCode;
 import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.common.params.SolrParams;
 import org.apache.solr.common.util.DateUtil;
@@ -48,8 +30,6 @@ import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SimpleFacets;
 import org.apache.solr.request.SolrQueryRequest;
-import org.apache.solr.schema.DateField;
-import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.TrieDateField;
 import org.apache.solr.search.DocSet;
@@ -57,6 +37,7 @@ import org.apache.solr.search.SolrIndexSearcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
 
@@ -89,12 +70,16 @@ public class GroupByComponent extends SearchComponent {
         public static final String GROUPBY = "groupby";
 
         public static final String DEBUG = "groupby.debug";
-
+        
         public static final String STATS = "groupby.stats";
+        
+        public static final String DISTINCT = "groupby.distinct";
 
         public static final String LIMIT = "groupby.limit";
         
         public static final String SIZE = "groupby.size";
+        
+        public static final String FILTER = "groupby.filter";
 
         public static final String MINCOUNT = "groupby.mincount";
 
@@ -113,6 +98,9 @@ public class GroupByComponent extends SearchComponent {
     @Override
     public void prepare(ResponseBuilder rb) throws IOException {
         if (rb.req.getParams().get(Params.GROUPBY, "").isEmpty() == false) {
+        	if (rb.req.getParams().getBool(Params.FILTER, false)) {
+        		rb.setNeedDocSet( true );
+        	}
             if (log.isDebugEnabled()) {
                 log.debug("Activated GroupByComponent");
             }
@@ -126,6 +114,7 @@ public class GroupByComponent extends SearchComponent {
         }
 
         SolrQueryRequest req = rb.req;
+        DocSet contrained_set_of_documents = rb.req.getParams().getBool(Params.FILTER, false) ? rb.getResults().docSet : null;
 
         // grab parameters for aggregating against always set facet
         // to max values to allow for distributed queries and for
@@ -136,6 +125,7 @@ public class GroupByComponent extends SearchComponent {
         params.set("facet.limit", req.getParams().getInt(Params.LIMIT, Integer.MAX_VALUE));
         params.set("facet.missing", false);
         params.set("facet.mincount", req.getParams().getInt(Params.MINCOUNT, 1));
+        params.set("cache", "false");
 
         // the group by parameters passed in by the user
         // &groupby=product_brand_name&groupby=product_category_name
@@ -157,7 +147,7 @@ public class GroupByComponent extends SearchComponent {
             String[] groupByFields = groupByArg.split(",");
             LinkedList<String> queue = new LinkedList<String>();
             queue.addAll(Lists.newArrayList(groupByFields));
-            pivot.add(collect(queue, req, params, predicates));
+            pivot.add(collect(contrained_set_of_documents, queue, req, params, predicates));
         }
         rb.rsp.add("groups", pivot);
 
@@ -166,7 +156,7 @@ public class GroupByComponent extends SearchComponent {
         }
     }
 
-    private SimpleOrderedMap<Object> collect(LinkedList<String> queue, SolrQueryRequest req, SolrParams params, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
+    private SimpleOrderedMap<Object> collect(DocSet contrained_set_of_documents, LinkedList<String> queue, SolrQueryRequest req, SolrParams params, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
 
         String field = queue.removeFirst();
 
@@ -194,11 +184,17 @@ public class GroupByComponent extends SearchComponent {
             }
 
             docs = req.getSearcher().getDocSet(q);
+            if (contrained_set_of_documents != null) {
+            	docs = docs.intersection(contrained_set_of_documents);
+            }
 
             parents.add(field);
             facets = new SimpleFacets(req, docs, params).getTermCounts(fieldName);
         } else {
             docs = req.getSearcher().getDocSet(new WildcardQuery(new Term(field, "*")));
+            if (contrained_set_of_documents != null) {
+            	docs = docs.intersection(contrained_set_of_documents);
+            }
             facets = new SimpleFacets(req, docs, params).getTermCounts(field);
         }
 
@@ -225,6 +221,7 @@ public class GroupByComponent extends SearchComponent {
             pivot.add(parent.getKey(), parent.getValue());
 
             boolean skip = false;
+            
             if (params.getParams(Params.STATS) != null) {
                 NamedList<Object> stats = new NamedList<Object>();
 
@@ -280,8 +277,7 @@ public class GroupByComponent extends SearchComponent {
                     // has constraint filter
                     if (fieldName.indexOf(":") > -1) {
                         String[] filter = fieldName.split(":");
-                        Query sub = extractQuery(schema, fieldName, null);// new TermQuery(new
-                                                                  // Term(filter[0], filter[1]));
+                        Query sub = extractQuery(schema, fieldName, null);
                         fieldName = filter[0];
                         children = new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
                     } else {
@@ -299,7 +295,28 @@ public class GroupByComponent extends SearchComponent {
                     } else {
                         clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
                     }
-                    pivot.add(nextField, collectChildren(schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));
+                    // check if we have distinct, and if so, are we last item? if so, then only return uniques
+                    if (params.getParams(Params.DISTINCT) != null && queue.size() <= 1) {
+                    	// count them up in a rough sketch
+                    	HyperLogLog hll = new HyperLogLog(14);
+                    	Integer count = 0;
+                    	for (Map.Entry<String, Integer> child : children) {
+                    		hll.offer(child.getKey());
+                    		count += child.getValue();
+                    	}
+                    	NamedList<Object> n = new NamedList<Object>();
+                    	n.add("unique", hll.cardinality());
+                    	n.add("total", count);
+                    	String fieldName = nextField;
+                        if (hasBlockJoinHint(fieldName)) {
+                        	fieldName = fieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
+                        }
+                        n.add("field", fieldName);
+                        pivot.add("pivot", n);
+
+                    } else {
+                    	pivot.add(nextField, collectChildren(schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));
+                    }
                 }
             }
 

@@ -573,6 +573,23 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
     }
+    
+    @Test
+    public void testGroupByDistinctPivot() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set("cache", "false");
+        p.set("fq", "id:111111*");
+        p.set(GroupByComponent.Params.GROUPBY, "noun:shopper/id,noun:xact/product_brand_name");
+        p.set(GroupByComponent.Params.FILTER, true);
+        // p.set(GroupByComponent.Params.DISTINCT, "true");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+    }
 
     /**
      * Expected to fail...
