@@ -43,6 +43,11 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
+        
+        p.set("wt", "json");
+        p.set("json.nl", "map");
+        req = new LocalSolrQueryRequest(h.getCore(), p);
+        System.out.println(h.query(req));
     }
     
     @Test
@@ -60,13 +65,13 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         
         // we should have 2 unique shoppers
         assertEquals(XPathHelper.query(xml, "//arr[@name='network_id']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='site_id']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='site_id']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='media_delivery']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='conversion']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='site_id']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='site_id']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='conversion']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//int[@name='conversion']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//int[@name='media_delivery']/..//long[@name='unique']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='conversion']/..//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='media_delivery']/..//long[@name='unique']"), "2");
     }
     
     @Test
@@ -84,16 +89,16 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
       
 
         assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='111111']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='222222']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='2222222']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='333333']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='0000000']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='111111']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='222222']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='2222222']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='333333']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='0000000']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//int[@name='111111']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//int[@name='111111']/..//int[@name='total']"), "2");
-        assertEquals(XPathHelper.getText(xml, "//int[@name='222222']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//int[@name='222222']/..//int[@name='total']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='111111']/..//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='111111']/..//int[@name='total']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='222222']/..//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='222222']/..//int[@name='total']"), "2");
     }
     
     @Test
@@ -111,12 +116,12 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         
         // we should have 2 unique shoppers
         assertEquals(XPathHelper.query(xml, "//arr[@name='type']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='media_delivery']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//int[@name='conversion']").getLength(), 0);
-        assertEquals(XPathHelper.query(xml, "//int[@name='media_delivery']/..//int[@name='12341234']").getLength(), 0);
-        assertEquals(XPathHelper.query(xml, "//int[@name='media_delivery']/..//int[@name='88888888']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//str[text()='conversion']").getLength(), 0);
+        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']/..//int[@name='12341234']").getLength(), 0);
+        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']/..//str[text()='88888888']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//int[@name='media_delivery']/..//int[@name='88888888']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='media_delivery']/..//str[text()='88888888']/../int[@name='count']"), "1");
     }
     
     protected void setupIndex() throws IOException {

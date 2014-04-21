@@ -149,7 +149,7 @@ public class GroupByComponent extends SearchComponent {
             queue.addAll(Lists.newArrayList(groupByFields));
             pivot.add(collect(contrained_set_of_documents, queue, req, params, predicates));
         }
-        rb.rsp.add("groups", pivot);
+        rb.rsp.add("group", pivot);
 
         if (req.getParams().getBool(Params.DEBUG, false)) {
             rb.rsp.add("groups.debug", debug);
@@ -218,7 +218,8 @@ public class GroupByComponent extends SearchComponent {
             }
 
             SimpleOrderedMap<Object> pivot = new SimpleOrderedMap<Object>();
-            pivot.add(parent.getKey(), parent.getValue());
+            pivot.add("value", parent.getKey());
+            pivot.add("count", parent.getValue());
 
             boolean skip = false;
             
@@ -318,10 +319,12 @@ public class GroupByComponent extends SearchComponent {
                         	fieldName = fieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
                         }
                         n.add("field", fieldName);
-                        pivot.add("pivot", n);
+                        pivot.add("group", n);
 
                     } else {
-                    	pivot.add(nextField, collectChildren(contrained_set_of_documents, schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));
+                    	NamedList<Object> n = new NamedList<Object>();
+                    	n.add(nextField, collectChildren(contrained_set_of_documents, schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));                   	
+                    	pivot.add("group", n);
                     }
                 }
             }

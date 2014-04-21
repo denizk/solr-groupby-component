@@ -300,11 +300,11 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         System.out.println(xml);
 
         // rollup at TAMPA should be $10.00
-        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//str[text()=\"TAMPA\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
         assertEquals("9.97", nodes.item(0).getTextContent());
         // rollup for energy drinks in TAMPA should be $7.00
-        nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../arr[@name=\"noun:xact/product_category_name\"]/lst/int[@name=\"ENERGY DRINKS\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()=\"TAMPA\"]//arr[@name=\"noun:xact/product_category_name\"]//str[text()=\"ENERGY DRINKS\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
         assertEquals(1, nodes.getLength());
         assertEquals("6.97", nodes.item(0).getTextContent().substring(0, 4));
     }
