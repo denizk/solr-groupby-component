@@ -10,7 +10,6 @@ import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
 import org.junit.BeforeClass;
 import org.junit.Test;
-import org.w3c.dom.NodeList;
 
 /**
  * Tests the group by component on a flat index.
@@ -65,8 +64,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         
         // we should have 2 unique shoppers
         assertEquals(XPathHelper.query(xml, "//arr[@name='network_id']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='site_id']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='site_id']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='site_id']").getLength(), 1);
         assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']").getLength(), 1);
         assertEquals(XPathHelper.query(xml, "//str[text()='conversion']").getLength(), 1);
         

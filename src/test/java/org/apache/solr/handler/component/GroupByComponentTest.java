@@ -81,7 +81,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         parser.parse(new InputSource(new StringReader(response)));
         Document document = parser.getDocument();
         XPath xpath = XPathFactory.newInstance().newXPath();
-        NodeList nodes = (NodeList) xpath.compile("//arr[@name=\"groups\"]//arr[@name=\"_root_\"]//lst//int").evaluate(document, XPathConstants.NODESET);
+        NodeList nodes = (NodeList) xpath.compile("//arr[@name='group']//arr[@name='_root_']//lst//int").evaluate(document, XPathConstants.NODESET);
         assertEquals(2, nodes.getLength());
         assertEquals("6", nodes.item(0).getTextContent());
         assertEquals("5", nodes.item(1).getTextContent());
@@ -109,7 +109,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name=\"groups\"]//arr[@name=\"noun:shopper/_root_\"]//lst//int");
+        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='noun:shopper/_root_']//lst//int");
         assertEquals(2, nodes.getLength());
         assertEquals("1", nodes.item(0).getTextContent());
         assertEquals("1", nodes.item(1).getTextContent());
@@ -133,12 +133,12 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name=\"groups\"]//arr[@name=\"noun:shopper/_root_\"]//lst//int");
+        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='noun:shopper/_root_']//lst//int");
         assertEquals(2, nodes.getLength());
         assertEquals("1", nodes.item(0).getTextContent());
         assertEquals("1", nodes.item(1).getTextContent());
 
-        nodes = xpath(xml, "//int[@name=\"11111111\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='11111111']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals("6.99", nodes.item(0).getTextContent());
     }
 
@@ -161,10 +161,10 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name=\"groups\"]//arr[@name=\"_root_\"]//lst//int");
+        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='_root_']//lst//int");
         assertEquals(2, nodes.getLength());
 
-        nodes = xpath(xml, "//int[@name=\"11111111\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='11111111']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals("6.99", nodes.item(0).getTextContent());
     }
 
@@ -189,13 +189,13 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name=\"groups\"]//arr[@name=\"noun:order/order_city_name\"]//lst//int");
+        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='noun:order/order_city_name']//lst//int");
         assertEquals(2, nodes.getLength());
 
-        nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='TAMPA']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals("9.97", nodes.item(0).getTextContent());
 
-        nodes = xpath(xml, "//int[@name=\"MIAMI\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='MIAMI']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals("2.99", nodes.item(0).getTextContent());
     }
 
@@ -217,7 +217,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../arr/lst/int[@name=\"STARBURST\"]");
+        NodeList nodes = xpath(xml, "//str[text()='TAMPA']/..//str[text()='STARBURST']/../int[@name='count']");
         assertEquals(1, nodes.getLength());
         assertEquals("1", nodes.item(0).getTextContent());
     }
@@ -242,9 +242,8 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
 
         // verify that the total # of star bursts returned for TAMPA is 1 (as we have multiple
         // starbursts in multi cities, but only 1 in TAMPA)
-        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../arr/lst/int[@name=\"STARBURST\"]");
-        assertEquals(1, nodes.getLength());
-        assertEquals("1", nodes.item(0).getTextContent());
+        Long value = XPathHelper.getLong(xml, "//str[text()='TAMPA']/..//str[text()='STARBURST']/../int[@name='count']");
+        assertEquals(1L, value.longValue());
     }
 
     /**
@@ -265,17 +264,16 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../arr/lst/int[@name=\"ENERGY DRINKS\"]");
+        NodeList nodes = xpath(xml, "//str[text()='TAMPA']/..//str[text()='ENERGY DRINKS']");
 
         assertEquals(1, nodes.getLength());
-        assertEquals("3", nodes.item(0).getTextContent());
+        assertEquals(3L, XPathHelper.getLong(xml, "//str[text()='TAMPA']/..//str[text()='ENERGY DRINKS']/../int[@name='count']").longValue());
 
-        // verify tampa only has the 4 categories of purchase
-        nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../arr/lst/int");
+        nodes = xpath(xml, "//str[text()='TAMPA']/..//arr[@name='noun:xact/product_category_name']//str[@name='value']");
         assertEquals(3, nodes.getLength());
 
         // verify sunrise as 2 categories
-        nodes = xpath(xml, "//int[@name=\"MIAMI\"]/../arr/lst/int");
+        nodes = xpath(xml, "//str[text()='MIAMI']/..//arr[@name='noun:xact/product_category_name']//str[@name='value']");
         assertEquals(1, nodes.getLength());
     }
 
@@ -300,11 +298,11 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         System.out.println(xml);
 
         // rollup at TAMPA should be $10.00
-        NodeList nodes = xpath(xml, "//str[text()=\"TAMPA\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//str[text()='TAMPA']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("9.97", nodes.item(0).getTextContent());
         // rollup for energy drinks in TAMPA should be $7.00
-        nodes = xpath(xml, "//str[text()=\"TAMPA\"]//arr[@name=\"noun:xact/product_category_name\"]//str[text()=\"ENERGY DRINKS\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='TAMPA']/..//arr[@name='noun:xact/product_category_name']//str[text()='ENERGY DRINKS']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("6.97", nodes.item(0).getTextContent().substring(0, 4));
     }
@@ -327,15 +325,15 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"2013-04-07T12:00:00Z\"]/../lst/lst/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//str[text()='2013-04-07T12:00:00Z']/..//lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("6.99", nodes.item(0).getTextContent());
 
-        nodes = xpath(xml, "//int[@name=\"2013-05-14T12:00:00Z\"]/../lst/lst/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='2013-05-14T12:00:00Z']/..//lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("2.99", nodes.item(0).getTextContent());
 
-        nodes = xpath(xml, "//int[@name=\"2013-05-22T12:00:00Z\"]/../lst/lst/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='2013-05-22T12:00:00Z']/..//lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("2.98", nodes.item(0).getTextContent());
     }
@@ -361,7 +359,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         System.out.println(xml);
 
         // if regular facets over entire index we should get 3:$5, 2:$2, 1:$1
-        NodeList nodes = xpath(xml, "//lst[@name=\"product_purchase_amount\"]/int");
+        NodeList nodes = xpath(xml, "//lst[@name='product_purchase_amount']/int");
         assertEquals(5, nodes.getLength());
         assertEquals("2", nodes.item(0).getTextContent());
         assertEquals("2.0", nodes.item(0).getAttributes().getNamedItem("name").getTextContent());
@@ -395,7 +393,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         System.out.println(xml);
 
         // there should be 3 $5 energy drinks and 1 $2.0 energy drink
-        NodeList nodes = xpath(xml, "//lst[@name=\"product_purchase_amount\"]/int");
+        NodeList nodes = xpath(xml, "//lst[@name='product_purchase_amount']/int");
         assertEquals(4, nodes.getLength());
         assertEquals("1", nodes.item(0).getTextContent());
         assertEquals("1.99", nodes.item(0).getAttributes().getNamedItem("name").getTextContent());
@@ -436,17 +434,17 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         System.out.println(xml);
 
         // verify we only pull back the constrained queries
-        NodeList nodes = xpath(xml, "//arr[@name=\"groups\"]/lst/arr");
+        NodeList nodes = xpath(xml, "//arr[@name='group']/lst/arr");
         assertEquals(1, nodes.getLength());
-        nodes = xpath(xml, "//int[@name=\"FLORIDA\"]");
+        nodes = xpath(xml, "//str[text()='FLORIDA']");
         assertEquals(1, nodes.getLength());
-        nodes = xpath(xml, "//int[@name=\"TAMPA\"]");
+        nodes = xpath(xml, "//str[text()='TAMPA']");
         assertEquals(1, nodes.getLength());
-        nodes = xpath(xml, "//int[@name=\"ENERGY DRINKS\"]");
+        nodes = xpath(xml, "//str[text()='ENERGY DRINKS']");
         assertEquals(1, nodes.getLength());
-        nodes = xpath(xml, "//int[@name=\"CANDY\"]");
+        nodes = xpath(xml, "//str[text()='CANDY']");
         assertEquals(1, nodes.getLength());
-        nodes = xpath(xml, "//int[@name=\"PROTEIN SHAKE\"]");
+        nodes = xpath(xml, "//str[text()='PROTEIN SHAKE']");
         assertEquals(1, nodes.getLength());
     }
 
@@ -476,7 +474,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"order\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//str[text()='order']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("12.96", nodes.item(0).getTextContent());
     }
@@ -503,7 +501,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"11111111\"]/../lst[@name=\"stats\"]/lst[@name=\"product_purchase_amount\"]/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//str[text()='11111111']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("6.99", nodes.item(0).getTextContent());
     }
@@ -583,11 +581,11 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//int[@name=\"11111111\"]/../arr/lst/lst/lst/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//str[text()='11111111']/..//str[text()='RED BULL']/..//double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("1.99", nodes.item(0).getTextContent());
 
-        nodes = xpath(xml, "//int[@name=\"22222222\"]/../arr/lst/lst/lst/double[@name=\"sum\"]");
+        nodes = xpath(xml, "//str[text()='22222222']/..//str[text()='RED BULL']/..//double[@name='sum']");
         assertEquals(1, nodes.getLength());
         assertEquals("5.97", nodes.item(0).getTextContent().substring(0, 4));
     }
@@ -610,7 +608,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name=\"noun:xact/product_brand_name:R*\"]/lst/lst/lst/double[@name=\"sum\"]");
+        NodeList nodes = xpath(xml, "//arr[@name='noun:xact/product_brand_name:R*']/lst/lst/lst/double[@name='sum']");
         assertEquals(2, nodes.getLength());
         assertEquals("1.99", nodes.item(0).getTextContent());
         assertEquals("5.97", nodes.item(1).getTextContent().substring(0, 4));
