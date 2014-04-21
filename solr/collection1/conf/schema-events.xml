@@ -29,8 +29,15 @@
    <field name="id" type="string" indexed="true" stored="true" required="false" />
    <field name="_root_" type="string" indexed="true" stored="true" required="false" />
    <field name="_version_" type="long" indexed="true" stored="true" multiValued="false" />
-   <!-- holds our hierarchy definition for block joins -->
-   <field name="noun" type="string" indexed="true" stored="false" required="true" />   
+   
+   <field name="type" type="string" indexed="true" stored="false" required="false" />
+   <field name="dt" type="tdate" indexed="true" stored="false" required="false" />
+   <field name="cid" type="string" indexed="true" stored="false" required="false" />
+   <field name="site_id" type="string" indexed="true" stored="false" required="false" />
+   <field name="network_id" type="string" indexed="true" stored="false" required="false" />
+   <field name="source_ids" type="string" indexed="true" stored="false" required="false" multiValued="true" />
+
+
    <dynamicField name="*_date"  type="tdate"  indexed="true"  stored="false" multiValued="false"/>
    <dynamicField name="*_name"  type="string"  indexed="true"  stored="false" multiValued="false"/>
    <dynamicField name="*_amount"  type="float"  indexed="true"  stored="false" multiValued="false"/>

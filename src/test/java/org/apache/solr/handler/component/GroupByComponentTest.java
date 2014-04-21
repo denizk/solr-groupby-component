@@ -531,33 +531,6 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         System.out.println(json);
     }
 
-    /**
-     * In this example we expect to get back $15.00 spend as there is $10.00 of spend in TAMPA for
-     * shopper 1, and $5.00 of spend in shopper 2 (however; shopper 2 has other spend in other
-     * cities which should not count).
-     * 
-     * @throws Exception
-     */
-    @Test
-    public void testDrillThrough() throws Exception {
-        ModifiableSolrParams p = new ModifiableSolrParams();
-        p.set("q", "*:*");
-        p.set("wt", "xml");
-        p.set("rows", "0");
-        p.set("indent", "true");
-        p.set(GroupByComponent.Params.GROUPBY, "noun:shopper/noun,noun:order/order_city_name:TAMPA");
-        p.add(GroupByComponent.Params.STATS, "noun:xact/product_purchase_amount");
-        p.set(GroupByComponent.Params.PERCENTILES, "25,50,75");
-        p.set(GroupByComponent.Params.PERCENTILES_COMPRESSION, "1000");
-        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
-        String xml = h.query(req);
-        System.out.println(xml);
-
-        NodeList nodes = xpath(xml, "//int[@name=\"TAMPA\"]/../lst[@name=\"stats\"]/lst/double[@name=\"sum\"]");
-        assertEquals(1, nodes.getLength());
-        assertEquals("9.97", nodes.item(0).getTextContent().substring(0, 4));
-    }
-
     @Test
     public void testComplexDrillPath() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();

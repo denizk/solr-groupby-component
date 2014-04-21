@@ -269,6 +269,7 @@ public class GroupByComponent extends SearchComponent {
 
             if (nextField != null) {
                 Query constrainQuery = getNestedBlockJoinQueryOrTermQuery(schema, parentField, parent.getKey(), priorQueries, nextField);
+                System.out.println(constrainQuery);
                 DocSet intersection = indexSearcher.getDocSet(constrainQuery);
 
                 NamedList<Integer> children;
@@ -296,7 +297,7 @@ public class GroupByComponent extends SearchComponent {
                         clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
                     }
                     // check if we have distinct, and if so, are we last item? if so, then only return uniques
-                    if (params.getParams(Params.DISTINCT) != null && queue.size() <= 1) {
+                    if (params.getParams(Params.DISTINCT) != null && queue.size() <= 0) {
                     	// count them up in a rough sketch
                     	HyperLogLog hll = new HyperLogLog(14);
                     	Integer count = 0;
@@ -428,14 +429,28 @@ public class GroupByComponent extends SearchComponent {
         // check that we aren't on same level as child...
         int i = previousQueries.size() - 1;
         String previousJoinHint = null;
+        Boolean hasBlockJoinInQueryHieararchy = false;
         while (previousJoinHint == null && i >= 0) {
+        	System.out.println("previous query -> " + previousQueries.get(i));
+        	if (!hasBlockJoinInQueryHieararchy && previousQueries.get(i).split(BLOCK_JOIN_PATH_HINT).length > 1) {
+        		String[] pair = previousQueries.get(i).split(BLOCK_JOIN_PATH_HINT);
+        		hasBlockJoinInQueryHieararchy = !pair[0].equalsIgnoreCase(pair[1]);
+        	}
             previousJoinHint = extractBlockJoinHint(previousQueries.get(i));
+            
             i = i - 1;
+        }
+        
+        // does any prior actuall have a block join?
+        if (previousJoinHint != null && previousJoinHint.matches("^[^:]+:[^\\/]+$") && hasBlockJoinInQueryHieararchy == false) {
+        	System.out.println("no parent block join yet...");
+        	previousJoinHint = null;
         }
 
         BooleanQuery query = new BooleanQuery();
         if (null != previousJoinHint) {
             if (previousJoinHint.equalsIgnoreCase(childBlockJoinHint)) {
+            	System.out.println(">> 0 " + termKey);
                 // we are querying at same level
                 for (String fq : blockJoins.get(previousJoinHint)) {
                     query.add(extractQuery(schema, fq, null), Occur.MUST);
@@ -443,6 +458,7 @@ public class GroupByComponent extends SearchComponent {
                 query.add(extractQuery(schema, termKey, termValue), Occur.MUST);
             } else {
                 if (previousJoinHint.equalsIgnoreCase(extractBlockJoinHint(termKey))) {
+                	System.out.println(">> 1 " + termKey);
                     // this query being executed as at same level as prior parent
                     // can we can assume more restrictive than parent?
                     BooleanQuery q = new BooleanQuery();
@@ -451,6 +467,7 @@ public class GroupByComponent extends SearchComponent {
                     CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(q));
                     query.add(new ToChildBlockJoinQuery(thisQuery, filter, false), Occur.MUST);
                 } else {
+                	System.out.println(">> 2 " + termKey + " / " + previousJoinHint);
                     BooleanQuery bq = new BooleanQuery();
 
                     // sanitize block joins if we have hints grab most specific and move on
@@ -483,6 +500,7 @@ public class GroupByComponent extends SearchComponent {
                 }
             }
         } else if (null != childBlockJoinHint && previousJoinHint == null) {
+        	System.out.println(">> 3 " + termKey);
             // this is first time we are looking at a child and
             // we can assume everything before this has been a parent query
             BooleanQuery q = new BooleanQuery();
@@ -494,6 +512,7 @@ public class GroupByComponent extends SearchComponent {
             CachingWrapperFilter filter = new FixedBitSetCachingWrapperFilter(new QueryWrapperFilter(q));
             query.add(new ToChildBlockJoinQuery(extractQuery(schema, termKey, termValue), filter, false), Occur.MUST);
         } else {
+        	System.out.println(">> 4 " + termKey);
             // no block join hints specified build regular solr query
             for (String key : blockJoins.keySet()) {
                 for (String fq : blockJoins.get(key)) {
