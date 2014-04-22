@@ -208,7 +208,7 @@ public class GroupByComponent extends SearchComponent {
 
         results.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
         
-        if (params.getBool(Params.INTERSECT, false)) {
+        if (params.getBool(Params.DISTINCT, false)) {
             intersect(results);
         }
 
@@ -279,7 +279,7 @@ public class GroupByComponent extends SearchComponent {
                 // add up sets here..
                 NamedList<Object> set = new NamedList<Object>();
                 set.add("intersect", inclusion_exlucsion_principle_instersect);
-                set.add("union", total_count);
+                set.add("union", union_count);
                 
                 wrap.add((String)b.get("parent"), set);
             }
