@@ -36,6 +36,10 @@
    <field name="site_id" type="string" indexed="true" stored="false" required="false" />
    <field name="network_id" type="string" indexed="true" stored="false" required="false" />
    <field name="source_ids" type="string" indexed="true" stored="false" required="false" multiValued="true" />
+   
+   <field name="purchased_qty" type="tint" indexed="true" stored="false" required="false" />
+   <field name="purchased_amount" type="tfloat" indexed="true" stored="false" required="false" />
+   <field name="purchased_upcs" type="string" indexed="true" stored="false" required="false" multiValued="true" />
 
 
    <dynamicField name="*_date"  type="tdate"  indexed="true"  stored="false" multiValued="false"/>

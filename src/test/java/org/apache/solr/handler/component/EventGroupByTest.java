@@ -46,10 +46,10 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         System.out.println(xml);
         
         assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 3L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
         
         assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 3L);       
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 2L);       
     }
     
     @Test
@@ -67,10 +67,27 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         System.out.println(xml);
         
         assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 3L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
         
         assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 3L);       
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 2L);       
+    }
+    
+    @Test
+    public void should_be_able_to_pivot_trie_numeric_values() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set(GroupByComponent.Params.GROUPBY, "type,purchased_qty,cid");
+        p.set(GroupByComponent.Params.DISTINCT, "true");
+        p.set(GroupByComponent.Params.INTERSECT, "true");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+        
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//arr[@name='purchased_qty']/lst/str[text()='2']/..//long[@name='intersect']").longValue(), 1L);
     }
     
     @Test
@@ -177,6 +194,10 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("source_ids", "333333");
         doc.addField("site_id", "1");
         doc.addField("network_id", "1");
+        doc.addField("purchased_qty", 5L);
+        doc.addField("purchased_amount", 10.99F);
+        doc.addField("purchased_upcs", "00000001");
+        doc.addField("purchased_upcs", "00000002");
         assertU(adoc(doc));
         
         doc = new SolrInputDocument();
@@ -199,6 +220,9 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("source_ids", "2222222");
         doc.addField("site_id", "1");
         doc.addField("network_id", "1");
+        doc.addField("purchased_qty", 2L);
+        doc.addField("purchased_amount", 2.99F);
+        doc.addField("purchased_upcs", "00000001");
         assertU(adoc(doc));
         
         doc = new SolrInputDocument();

@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.BooleanQuery;
@@ -33,8 +34,13 @@ import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SimpleFacets;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.TrieDateField;
+import org.apache.solr.schema.TrieDoubleField;
+import org.apache.solr.schema.TrieFloatField;
+import org.apache.solr.schema.TrieIntField;
+import org.apache.solr.schema.TrieLongField;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.SolrIndexSearcher;
 import org.slf4j.Logger;
@@ -486,6 +492,21 @@ public class GroupByComponent extends SearchComponent {
                 return new TrieDateField().getFieldQuery(null, schema.getField(field), value);
             }
             throw new RuntimeException("Can not group on date field not a TrieDateField");
+        } else if (value.matches("^-{0,1}[0-9]+")) {
+        	// number
+        	FieldType type = schema.getField(field).getType();
+        	NumericType numericType = type.getNumericType();
+        	if (numericType == NumericType.FLOAT) {
+        		return new TrieFloatField().getFieldQuery(null, schema.getField(field), value);
+        	} else if (numericType == NumericType.INT) {
+        		return new TrieIntField().getFieldQuery(null, schema.getField(field), value);
+        	} else if (numericType == NumericType.LONG) {
+        		return new TrieLongField().getFieldQuery(null, schema.getField(field), value);
+        	} else if (numericType == NumericType.DOUBLE) {
+        		return new TrieDoubleField().getFieldQuery(null, schema.getField(field), value);
+        	} else {
+        		return new WildcardQuery(new Term(field, null != value ? value : "*"));
+        	}
         } else {
             return new WildcardQuery(new Term(field, null != value ? value : "*"));
         }
