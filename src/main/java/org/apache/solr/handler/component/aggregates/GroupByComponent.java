@@ -208,61 +208,89 @@ public class GroupByComponent extends SearchComponent {
 
         results.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
         
-        if (params.getBool(Params.INTERSECT, false) && queue.size() <= 1) {
+        if (params.getBool(Params.INTERSECT, false)) {
             intersect(results);
         }
 
         return results;
     }
     
-    private void intersect(final SimpleOrderedMap<Object> results) {
+    @SuppressWarnings("unchecked")
+	private void intersect(final SimpleOrderedMap<Object> results) {
         try {
             for (Entry<String, Object> entry : results) {
-                System.out.println(entry);
                 if (entry.getValue() instanceof List<?>) {
                     collectHLL((List<NamedList<Object>>)entry.getValue());
                 }
             }
         } catch (CardinalityMergeException e) {
-            e.printStackTrace();
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+        	throw new RuntimeException(e);
         }
     }
     
-    // walk tree and collect all HLL matrix to create intersection
-    // 
-    private void collectHLL(List<NamedList<Object>> list) throws CardinalityMergeException {
-        
-        HyperLogLog intersectALL = new HyperLogLog(14);
+    // walk tree and collect all HLL matrix to create intersection (possible to do intersects at every level) which
+    // could be great... pivot {A,B,C} => intersects at C level, B level, and A level
+    @SuppressWarnings("unchecked")
+	private void collectHLL(List<NamedList<Object>> list) throws CardinalityMergeException, IOException {
         HashMap<NamedList<Object>, HyperLogLog> matrix = new HashMap<NamedList<Object>, HyperLogLog>();
         
         for (NamedList<Object> p : list) {
-            System.out.println(p);
-            if (p.get("group") != null&& p.get("group") instanceof List<?>) {
-                collectHLL((List<NamedList<Object>>)p.get("group"));
-            } else if (p.get("group") != null) {
-                // found it
-                NamedList<Object> v = (NamedList<Object>)p.get("group");
-                if (v.get("hll") != null) {
-                    HyperLogLog x = (HyperLogLog)v.get("hll");
-                    matrix.put(v, x);
-                }
+            if (p.get("group") != null) {
+            	Object o = p.get("group");
+            	if (o instanceof List<?>) {
+            		collectHLL((List<NamedList<Object>>)o);
+            	} else if (o != null) {
+	                // found it
+	                NamedList<Object> v = (NamedList<Object>)o;
+	                for (Entry<String, Object> entry : v) {
+						if (entry.getValue() instanceof List<?>) {
+							collectHLL((List<NamedList<Object>>)entry.getValue());
+						}
+					}
+	                if (v.get("hll") != null) {
+	                    HyperLogLog x = (HyperLogLog)v.get("hll");
+	                    v.add("parent", p.get("value"));
+	                    matrix.put(v, x);
+	                }
+            	}
             }
         }
+        
+        HashMap<NamedList<Object>, NamedList<Object>> sets = new HashMap<NamedList<Object>, NamedList<Object>>();
         
         // now with matrix if it has anything build intersections
         for (NamedList<Object> a : matrix.keySet()) {
             // get all other keys
-            NamedList<Object> intersections = new NamedList<Object>*();
+            
+        	NamedList<Object> wrap = new NamedList<Object>();
             for (NamedList<Object> b : matrix.keySet()) {
                 if (a == b) continue;
-                HyperLogLog union = (HyperLogLog)matrix.get(a).merge(matrix.get(b));
+                HyperLogLog hll_A = matrix.get(a);
+                HyperLogLog hll_B = matrix.get(b);
+                if (hll_A == null || hll_B == null) {
+                	continue;
+                }
+                HyperLogLog union = (HyperLogLog)hll_A.merge(hll_B);
                 long union_count = union.cardinality();
                 long total_count = matrix.get(a).cardinality() + matrix.get(b).cardinality();
                 long inclusion_exlucsion_principle_instersect = total_count - union_count;
                 // add up sets here..
-                a.add("set", inclusion_exlucsion_principle_instersect);
+                NamedList<Object> set = new NamedList<Object>();
+                set.add("intersect", inclusion_exlucsion_principle_instersect);
+                set.add("union", total_count);
+                
+                wrap.add((String)b.get("parent"), set);
             }
+            sets.put(a, wrap);
         }
+        
+        for (NamedList<Object> item : sets.keySet()) {
+        	item.add("join", sets.get(item));
+        	item.remove("parent");
+        	item.remove("hll");
+		}
     }
 
     @SuppressWarnings("unchecked")

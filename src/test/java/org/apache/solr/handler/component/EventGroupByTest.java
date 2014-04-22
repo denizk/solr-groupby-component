@@ -32,7 +32,28 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
     }
     
     @Test
-    public void should_be_able_to_intersect_group_sets() throws Exception {
+    public void should_be_able_to_intersect_groups() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        p.set(GroupByComponent.Params.GROUPBY, "network_id,site_id,type,cid");
+        p.set(GroupByComponent.Params.DISTINCT, "true");
+        p.set(GroupByComponent.Params.INTERSECT, "true");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+        
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 3L);
+        
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 3L);       
+    }
+    
+    @Test
+    public void should_be_able_to_intersect_groups_with_two_sets() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
         p.set("q", "*:*");
         p.set("wt", "xml");
@@ -44,6 +65,12 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
+        
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 3L);
+        
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 3L);       
     }
     
     @Test
