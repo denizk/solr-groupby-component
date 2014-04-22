@@ -1,7 +1,9 @@
 package org.apache.solr.handler.component.aggregates;
 
 import java.io.IOException;
+import java.text.DateFormat;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -10,17 +12,21 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.Map.Entry;
 
 import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.queryparser.xml.builders.NumericRangeFilterBuilder;
+import org.apache.lucene.queryparser.xml.builders.NumericRangeQueryBuilder;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.QueryWrapperFilter;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.BooleanClause.Occur;
+import org.apache.lucene.search.TermRangeQuery;
 import org.apache.lucene.search.WildcardQuery;
 import org.apache.lucene.search.join.FixedBitSetCachingWrapperFilter;
 import org.apache.lucene.search.join.ToChildBlockJoinQuery;
@@ -34,6 +40,7 @@ import org.apache.solr.handler.component.ResponseBuilder;
 import org.apache.solr.handler.component.SearchComponent;
 import org.apache.solr.request.SimpleFacets;
 import org.apache.solr.request.SolrQueryRequest;
+import org.apache.solr.schema.DateField;
 import org.apache.solr.schema.FieldType;
 import org.apache.solr.schema.IndexSchema;
 import org.apache.solr.schema.TrieDateField;
@@ -43,12 +50,15 @@ import org.apache.solr.schema.TrieIntField;
 import org.apache.solr.schema.TrieLongField;
 import org.apache.solr.search.DocSet;
 import org.apache.solr.search.SolrIndexSearcher;
+import org.apache.solr.search.SyntaxError;
+import org.apache.solr.util.DateMathParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.clearspring.analytics.stream.cardinality.CardinalityMergeException;
 import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 
 /*
@@ -84,6 +94,8 @@ public class GroupByComponent extends SearchComponent {
         public static final String STATS = "groupby.stats";
         
         public static final String DISTINCT = "groupby.distinct";
+        
+        public static final String RANGE = "groupby.range";
 
         public static final String LIMIT = "groupby.limit";
         
@@ -201,24 +213,93 @@ public class GroupByComponent extends SearchComponent {
             }
 
             parents.add(field);
-            facets = new SimpleFacets(req, docs, params).getTermCounts(fieldName);
+            facets = doFacets(fieldName, docs, req, params);
         } else {
             docs = req.getSearcher().getDocSet(new WildcardQuery(new Term(field, "*")));
             if (contrained_set_of_documents != null) {
             	docs = docs.intersection(contrained_set_of_documents);
             }
-            facets = new SimpleFacets(req, docs, params).getTermCounts(field);
+            facets = doFacets(field, docs, req, params);
+            // facets = new SimpleFacets(req, docs, params).getTermCounts(field);
         }
 
         SimpleOrderedMap<Object> results = new SimpleOrderedMap<Object>();
 
         results.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
         
-        if (params.getBool(Params.DISTINCT, false)) {
+        if (params.getBool(Params.DISTINCT, false) && params.getBool(Params.INTERSECT, true)) {
             intersect(results);
         }
 
         return results;
+    }
+    
+    SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+    
+    private NamedList<Integer> doFacets(String fieldName, DocSet docs, SolrQueryRequest req, SolrParams params) throws IOException {
+        // check of we are doing range facet
+        String start_range = req.getParams().get(Params.RANGE + "." + fieldName + ".start");
+        String end_range = req.getParams().get(Params.RANGE + "." + fieldName + ".end");
+        String gap = req.getParams().get(Params.RANGE + "." + fieldName + ".gap");
+        if (start_range != null && end_range != null && gap != null) {
+        	ModifiableSolrParams x = new ModifiableSolrParams(params);
+        	x.set("facet", true);
+        	x.set("facet.date", fieldName);
+        	x.set("facet.date.start", start_range);
+        	x.set("facet.date.end", end_range);
+        	x.set("facet.date.gap", gap);
+        	
+        	try {
+        		SimpleOrderedMap<Object> ranges = new SimpleOrderedMap<Object>();
+        		new SimpleFacets(req, docs, x).getFacetDateCounts(fieldName, ranges);
+        		NamedList<Object> dates = (NamedList<Object>)ranges.get(fieldName);
+        		Date start_period = (Date)dates.get("start");
+        		Date end_period = (Date)dates.get("end");
+        		
+        		// remove dates from data
+        		dates.remove("end");
+        		dates.remove("start");
+        		dates.remove("gap");
+        		
+        		NamedList<Integer> results = new NamedList<Integer>();
+        		// build up all dates available
+        		Date current_start_period = start_period;
+        		while (current_start_period.before(end_period)) {
+        			DateMathParser dateMathParser = new DateMathParser();
+        			dateMathParser.setNow(current_start_period);
+        			Date start_date = current_start_period;
+        			Date stop_date = dateMathParser.parseMath(gap);
+        			
+        			Object match = null;
+        			for (Entry<String, Object> entry : dates) {
+        				Date dt = iso.parse(entry.getKey());
+						if (start_date.getTime() <= dt.getTime() && dt.getTime() < stop_date.getTime()) {
+							match = entry.getValue();
+						}
+					}
+        			if (match != null) {
+        				results.add(fieldName + ":[" + iso.format(start_date) + " TO " + iso.format(stop_date) + "]", Integer.parseInt(match.toString()));
+        			} else {
+        				results.add(fieldName + ":[" + iso.format(start_date) + " TO " + iso.format(stop_date) + "]", 0);
+        			}
+        			current_start_period = stop_date;
+        		}
+        		
+//        		for (Entry<String, Object> entry : dates) {
+//        			DateMathParser dateMathParser = new DateMathParser();
+//        			Date start_date = iso.parse(entry.getKey());
+//        			dateMathParser.setNow(start_date);
+//        			Date stop_date = dateMathParser.parseMath(gap);
+//        			results.add(fieldName + ":[" + iso.format(start_date) + " TO " + iso.format(stop_date) + "]", Integer.parseInt(entry.getValue().toString()));
+//				}
+        		
+        		return results;
+        	} catch (Exception ex) {
+        		throw new RuntimeException(ex);
+        	}
+        } else {
+        	return new SimpleFacets(req, docs, params).getTermCounts(fieldName);
+        }
     }
     
     @SuppressWarnings("unchecked")
@@ -264,13 +345,13 @@ public class GroupByComponent extends SearchComponent {
             }
         }
         
-        HashMap<NamedList<Object>, NamedList<Object>> sets = new HashMap<NamedList<Object>, NamedList<Object>>();
+        HashMap<NamedList<Object>, SimpleOrderedMap<Object>> sets = new HashMap<NamedList<Object>, SimpleOrderedMap<Object>>();
         
         // now with matrix if it has anything build intersections
         for (NamedList<Object> a : matrix.keySet()) {
             // get all other keys
             
-        	NamedList<Object> wrap = new NamedList<Object>();
+        	SimpleOrderedMap<Object> wrap = new SimpleOrderedMap<Object>();
             for (NamedList<Object> b : matrix.keySet()) {
                 if (a == b) continue;
                 HyperLogLog hll_A = matrix.get(a);
@@ -306,14 +387,25 @@ public class GroupByComponent extends SearchComponent {
         String nextField = queue.pollFirst();
         SolrIndexSearcher indexSearcher = req.getSearcher();
 
-        for (Map.Entry<String, Integer> parent : parents) {
-            if (parent.getValue() <= 0) {
-                continue; // do not collect children when parent is 0
-            }
+        for (Map.Entry<String, Integer> parent : parents) {	// facets to iterate over (date ranges inclusive)
+//            if (parent.getValue() < 0) {
+//                continue; // do not collect children when parent is 0
+//            }
 
             SimpleOrderedMap<Object> pivot = new SimpleOrderedMap<Object>();
-            pivot.add("value", parent.getKey());
+            if (parent.getKey().contains(":") && parent.getKey().contains(" TO ")) {
+            	// pivot.add("value", parent.getKey().substring(parent.getKey().indexOf("[")+1, parent.getKey().indexOf(" TO ")));
+            	pivot.add("value", parent.getKey());
+            	String key = parent.getKey().substring(parent.getKey().indexOf(":")+1).replace("[", "").replace("]", "");
+            	String[] ab = key.split(" TO ");
+            	pivot.add("range.start", ab[0]);
+            	pivot.add("range.stop", ab[1]);
+            } else {
+            	pivot.add("value", parent.getKey());
+            }
             pivot.add("count", parent.getValue());
+            
+            // is this a range facet query? if so our key becomes [date->date]
 
             boolean skip = false;
             
@@ -398,7 +490,7 @@ public class GroupByComponent extends SearchComponent {
                     }
                     
                     // check if we have distinct, and if so, are we last item? if so, then only return unique items
-                    if (params.getParams(Params.DISTINCT) != null && queue.size() <= 0) {
+                    if (params.getParams(Params.DISTINCT) != null && params.getBool(Params.INTERSECT, true) && queue.size() <= 0) {
                     	// count them up in a rough sketch
                     	HyperLogLog hll = new HyperLogLog(14);
                     	Integer count = 0;
@@ -479,15 +571,31 @@ public class GroupByComponent extends SearchComponent {
             String query = keyValue[1];
             
             QueryParser queryParser = new QueryParser(Version.LUCENE_45, field, schema.getQueryAnalyzer());
-            queryParser.setAllowLeadingWildcard(true);
+            queryParser.setAllowLeadingWildcard(false);
             queryParser.setLowercaseExpandedTerms(false);
+            queryParser.setTimeZone(TimeZone.getDefault());
+            queryParser.setAnalyzeRangeTerms(true);
             try {
                 return queryParser.parse(query);
             } catch (org.apache.lucene.queryparser.classic.ParseException e) {
                 throw new RuntimeException(e);
             }
         }
-        if (null != tryParseDate(value)) {
+        // range query?
+        if (value.matches("^.*:\\[.*\\sTO\\s.*\\]$")) {
+        	// is date?
+        	String fq = value.substring(value.indexOf(":")+1);
+        	String a = fq.split(" TO ")[0].replace("[", "");
+        	String b = fq.split(" TO ")[1].replace("]", "");
+    		SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+        	
+        	try {
+				return org.apache.lucene.search.NumericRangeQuery.newLongRange(field, iso.parse(a).getTime(), iso.parse(b).getTime(), true, false);
+			} catch (ParseException e) {
+				// not a date, instead a numeric?
+				return org.apache.lucene.search.NumericRangeQuery.newLongRange(field, Long.parseLong(a), Long.parseLong(b), true, false);
+			}
+        } else if (null != tryParseDate(value)) {
             if (schema.getField(field).getType() instanceof TrieDateField) {
                 return new TrieDateField().getFieldQuery(null, schema.getField(field), value);
             }

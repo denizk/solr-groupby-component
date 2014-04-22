@@ -8,8 +8,11 @@ import org.apache.solr.common.params.ModifiableSolrParams;
 import org.apache.solr.handler.component.aggregates.GroupByComponent;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
+import org.joda.time.DateTimeZone;
 import org.junit.BeforeClass;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TestRule;
 
 /**
  * Tests the group by component on a flat index.
@@ -18,6 +21,8 @@ import org.junit.Test;
  *
  */
 public class EventGroupByTest extends SolrTestCaseJ4 {
+	
+	@Rule public TestRule timeZoneRule = new TimeZoneTestRule(DateTimeZone.UTC);
 	
     @Override
     public void setUp() throws Exception {
@@ -28,6 +33,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
     
     @BeforeClass
     public static void beforeTests() throws Exception {
+    	System.setProperty("user.timezone", "GMT");
         initCore("solrconfig-aggregates.xml", "schema-events.xml");
     }
     
@@ -181,6 +187,42 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         assertEquals(XPathHelper.getText(xml, "//str[text()='media_delivery']/..//str[text()='88888888']/../int[@name='count']"), "1");
     }
     
+    @Test
+    public void should_be_able_to_group_by_date_with_range() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        // date (day), (hour), (week), (month)
+        p.set(GroupByComponent.Params.GROUPBY, "dt,cid");
+        p.set(GroupByComponent.Params.DISTINCT, "true");
+        p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-01-01T11:00:00Z/DAY-1DAY");
+        p.set(GroupByComponent.Params.RANGE + ".dt.end", "NOW/DAY+1DAY");
+        p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+7DAY");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+    }
+    
+    @Test
+    public void should_be_able_to_group_by_date_with_year_range() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        // date (day), (hour), (week), (month)
+        p.set(GroupByComponent.Params.GROUPBY, "dt,cid");
+        p.set(GroupByComponent.Params.DISTINCT, "true");
+        p.set(GroupByComponent.Params.RANGE + ".dt.start", "NOW/DAY-5YEARS");
+        p.set(GroupByComponent.Params.RANGE + ".dt.end", "NOW/DAY+1YEARS");
+        p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1YEAR");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+    }
+    
     protected void setupIndex() throws IOException {
         GroupByComponent c = (GroupByComponent) h.getCore().getSearchComponents().get(GroupByComponent.COMPONENT_NAME);
         assertTrue(c instanceof GroupByComponent);
@@ -188,7 +230,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("id", "1");
         doc.addField("type", "conversion");
         doc.addField("cid", 12341234L);
-        doc.addField("dt", "2014-01-01T12:00:00Z");
+        doc.addField("dt", "2014-01-01T23:59:59.999Z");
         doc.addField("source_ids", "111111");
         doc.addField("source_ids", "222222");
         doc.addField("source_ids", "333333");
@@ -204,7 +246,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("id", "2");
         doc.addField("type", "media_delivery");
         doc.addField("cid", 12341234L);
-        doc.addField("dt", "2014-01-01T11:00:00Z");
+        doc.addField("dt", "2014-01-01T23:59:59.999Z");
         doc.addField("source_ids", "111111");
         doc.addField("source_ids", "222222");
         doc.addField("source_ids", "333333");
@@ -216,7 +258,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("id", "3");
         doc.addField("type", "conversion");
         doc.addField("cid", 12341234L);
-        doc.addField("dt", "2014-01-01T11:00:00Z");
+        doc.addField("dt", "2014-01-15T23:59:59.999Z");
         doc.addField("source_ids", "2222222");
         doc.addField("site_id", "1");
         doc.addField("network_id", "1");
@@ -229,7 +271,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("id", "4");
         doc.addField("type", "media_delivery");
         doc.addField("cid", 12341234L);
-        doc.addField("dt", "2014-01-01T11:00:00Z");
+        doc.addField("dt", "2014-01-01T23:59:59.999Z");
         doc.addField("source_ids", "2222222");
         doc.addField("site_id", "1");
         doc.addField("network_id", "1");
@@ -239,7 +281,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("id", "5");
         doc.addField("type", "media_delivery");
         doc.addField("cid", 88888888L);
-        doc.addField("dt", "2014-01-01T11:00:00Z");
+        doc.addField("dt", "2014-01-01T23:59:59.999Z");
         doc.addField("source_ids", "0000000");
         doc.addField("source_ids", "1111111");
         doc.addField("site_id", "1");
