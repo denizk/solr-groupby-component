@@ -4,11 +4,14 @@ import java.io.IOException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.BooleanQuery;
@@ -37,6 +40,7 @@ import org.apache.solr.search.SolrIndexSearcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.clearspring.analytics.stream.cardinality.CardinalityMergeException;
 import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
@@ -80,6 +84,8 @@ public class GroupByComponent extends SearchComponent {
         public static final String SIZE = "groupby.size";
         
         public static final String FILTER = "groupby.filter";
+        
+        public static final String INTERSECT = "groupby.intersect";
 
         public static final String MINCOUNT = "groupby.mincount";
 
@@ -201,8 +207,62 @@ public class GroupByComponent extends SearchComponent {
         SimpleOrderedMap<Object> results = new SimpleOrderedMap<Object>();
 
         results.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
+        
+        if (params.getBool(Params.INTERSECT, false) && queue.size() <= 1) {
+            intersect(results);
+        }
 
         return results;
+    }
+    
+    private void intersect(final SimpleOrderedMap<Object> results) {
+        try {
+            for (Entry<String, Object> entry : results) {
+                System.out.println(entry);
+                if (entry.getValue() instanceof List<?>) {
+                    collectHLL((List<NamedList<Object>>)entry.getValue());
+                }
+            }
+        } catch (CardinalityMergeException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    // walk tree and collect all HLL matrix to create intersection
+    // 
+    private void collectHLL(List<NamedList<Object>> list) throws CardinalityMergeException {
+        
+        HyperLogLog intersectALL = new HyperLogLog(14);
+        HashMap<NamedList<Object>, HyperLogLog> matrix = new HashMap<NamedList<Object>, HyperLogLog>();
+        
+        for (NamedList<Object> p : list) {
+            System.out.println(p);
+            if (p.get("group") != null&& p.get("group") instanceof List<?>) {
+                collectHLL((List<NamedList<Object>>)p.get("group"));
+            } else if (p.get("group") != null) {
+                // found it
+                NamedList<Object> v = (NamedList<Object>)p.get("group");
+                if (v.get("hll") != null) {
+                    HyperLogLog x = (HyperLogLog)v.get("hll");
+                    matrix.put(v, x);
+                }
+            }
+        }
+        
+        // now with matrix if it has anything build intersections
+        for (NamedList<Object> a : matrix.keySet()) {
+            // get all other keys
+            NamedList<Object> intersections = new NamedList<Object>*();
+            for (NamedList<Object> b : matrix.keySet()) {
+                if (a == b) continue;
+                HyperLogLog union = (HyperLogLog)matrix.get(a).merge(matrix.get(b));
+                long union_count = union.cardinality();
+                long total_count = matrix.get(a).cardinality() + matrix.get(b).cardinality();
+                long inclusion_exlucsion_principle_instersect = total_count - union_count;
+                // add up sets here..
+                a.add("set", inclusion_exlucsion_principle_instersect);
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -302,7 +362,8 @@ public class GroupByComponent extends SearchComponent {
                     } else {
                         clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
                     }
-                    // check if we have distinct, and if so, are we last item? if so, then only return uniques
+                    
+                    // check if we have distinct, and if so, are we last item? if so, then only return unique items
                     if (params.getParams(Params.DISTINCT) != null && queue.size() <= 0) {
                     	// count them up in a rough sketch
                     	HyperLogLog hll = new HyperLogLog(14);
@@ -314,6 +375,7 @@ public class GroupByComponent extends SearchComponent {
                     	NamedList<Object> n = new NamedList<Object>();
                     	n.add("unique", hll.cardinality());
                     	n.add("total", count);
+                    	n.add("hll", hll);
                     	String fieldName = nextField;
                         if (hasBlockJoinHint(fieldName)) {
                         	fieldName = fieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
