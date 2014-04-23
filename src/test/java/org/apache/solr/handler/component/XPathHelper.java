@@ -24,8 +24,12 @@ public class XPathHelper {
         return nodes;
     }
     
-    public static String getText(String xml, String xpath) throws SAXException, IOException, XPathExpressionException {
-    	return query(xml, xpath).item(0).getTextContent();
+    public static String getText(String xml, String xpath) {
+    	try {
+    		return query(xml, xpath).item(0).getTextContent();
+    	} catch (Exception ex) {
+    		throw new RuntimeException("Could not process/find node '" + xpath + "'", ex);
+    	}
     }
     
     public static Long getLong(String xml, String xpath) throws SAXException, IOException, XPathExpressionException {

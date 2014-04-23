@@ -5,10 +5,13 @@ import java.io.IOException;
 import org.apache.solr.SolrTestCaseJ4;
 import org.apache.solr.common.SolrInputDocument;
 import org.apache.solr.common.params.ModifiableSolrParams;
+import org.apache.solr.handler.component.aggregates.DateMathParserFixed;
 import org.apache.solr.handler.component.aggregates.GroupByComponent;
 import org.apache.solr.request.LocalSolrQueryRequest;
 import org.apache.solr.request.SolrQueryRequest;
+import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
+import org.joda.time.format.ISODateTimeFormat;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -205,6 +208,25 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
     }
     
     @Test
+    public void should_be_able_to_group_by_date_range_and_return_empty_dates() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        // date (day), (hour), (week), (month)
+        p.set(GroupByComponent.Params.GROUPBY, "dt,cid");
+        p.set(GroupByComponent.Params.DISTINCT, "true");
+        p.set(GroupByComponent.Params.MINCOUNT, "0");
+        p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-01-01T00:00:00Z/DAY-1DAY");
+        p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-01-3T00:00:00Z/DAY+1DAY");
+        p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1DAY");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+    }
+    
+    @Test
     public void should_be_able_to_group_by_date_with_year_range() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
         p.set("q", "*:*");
@@ -214,12 +236,16 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         // date (day), (hour), (week), (month)
         p.set(GroupByComponent.Params.GROUPBY, "dt,cid");
         p.set(GroupByComponent.Params.DISTINCT, "true");
-        p.set(GroupByComponent.Params.RANGE + ".dt.start", "NOW/DAY-5YEARS");
-        p.set(GroupByComponent.Params.RANGE + ".dt.end", "NOW/DAY+1YEARS");
+        p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-03-15T12:12:11Z/YEAR-1YEAR");
+        p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-03-15T13:12:11Z/YEAR+1YEAR");
         p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1YEAR");
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
+        
+        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='count']"), "5");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//long[@name='unique']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='total']"), "5");
     }
     
     protected void setupIndex() throws IOException {

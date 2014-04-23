@@ -16,11 +16,14 @@ import java.util.Map;
 import java.util.TimeZone;
 import java.util.Map.Entry;
 
+import org.apache.lucene.document.DateTools;
+import org.apache.lucene.document.DateTools.Resolution;
 import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.queryparser.xml.builders.NumericRangeFilterBuilder;
 import org.apache.lucene.queryparser.xml.builders.NumericRangeQueryBuilder;
+import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
 import org.apache.lucene.search.Query;
@@ -253,11 +256,12 @@ public class GroupByComponent extends SearchComponent {
         	x.set("facet.date.gap", gap);
         	
         	try {
+        		// TODO move to range query filter
         		SimpleOrderedMap<Object> ranges = new SimpleOrderedMap<Object>();
         		new SimpleFacets(req, docs, x).getFacetDateCounts(fieldName, ranges);
         		NamedList<Object> dates = (NamedList<Object>)ranges.get(fieldName);
         		
-        		// remove dates from data
+        		// remove metadata from result set
         		dates.remove("end");
         		dates.remove("start");
         		dates.remove("gap");
@@ -556,6 +560,19 @@ public class GroupByComponent extends SearchComponent {
             return null;
         }
     }
+    
+    private static Query buildQueryFromText(String field, IndexSchema schema, String query) {
+        QueryParser queryParser = new QueryParser(Version.LUCENE_45, field, schema.getQueryAnalyzer());
+        queryParser.setAllowLeadingWildcard(false);
+        queryParser.setLowercaseExpandedTerms(false);
+        queryParser.setTimeZone(TimeZone.getDefault());
+        queryParser.setAnalyzeRangeTerms(true);
+        try {
+            return queryParser.parse(query);
+        } catch (org.apache.lucene.queryparser.classic.ParseException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private static Query extractQuery(IndexSchema schema, String term, String value) {
         String field = term;
@@ -566,34 +583,24 @@ public class GroupByComponent extends SearchComponent {
             String[] keyValue = field.split(":");
             field = keyValue[0];
             String query = keyValue[1];
-            
-            QueryParser queryParser = new QueryParser(Version.LUCENE_45, field, schema.getQueryAnalyzer());
-            queryParser.setAllowLeadingWildcard(false);
-            queryParser.setLowercaseExpandedTerms(false);
-            queryParser.setTimeZone(TimeZone.getDefault());
-            queryParser.setAnalyzeRangeTerms(true);
-            try {
-                return queryParser.parse(query);
-            } catch (org.apache.lucene.queryparser.classic.ParseException e) {
-                throw new RuntimeException(e);
-            }
+            return buildQueryFromText(field, schema, query);
         }
         // range query?
         if (value.matches("^.*:\\[.*\\sTO\\s.*\\]$")) {
         	// is date?
-        	String fq = value.substring(value.indexOf(":")+1);
-        	String a = fq.split(" TO ")[0].replace("[", "");
-        	String b = fq.split(" TO ")[1].replace("]", "");
-    		SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
-    		
-    		// return new TermRangeQuery(field, new BytesRef(a), new BytesRef(b), true, false);
-        	
-        	try {
-				return org.apache.lucene.search.NumericRangeQuery.newLongRange(field, iso.parse(a).getTime(), iso.parse(b).getTime(), true, false);
-			} catch (ParseException e) {
-				// not a date, instead a numeric?
-				return org.apache.lucene.search.NumericRangeQuery.newLongRange(field, Long.parseLong(a), Long.parseLong(b), true, false);
-			}
+        	return buildQueryFromText(field, schema, value);
+//        	String fq = value.substring(value.indexOf(":")+1);
+//        	String a = fq.split(" TO ")[0].replace("[", "");
+//        	String b = fq.split(" TO ")[1].replace("]", "");
+//    		SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+//    		
+//        	try {
+//        		// return new TermRangeQuery(field, new BytesRef(DateTools.dateToString(iso.parse(a), Resolution.SECOND)), new BytesRef(DateTools.dateToString(iso.parse(b), Resolution.SECOND)), true, false);        		
+//				return org.apache.lucene.search.NumericRangeQuery.newLongRange(field, iso.parse(a).getTime(), iso.parse(b).getTime(), true, false);
+//			} catch (ParseException e) {
+//				// not a date, instead a numeric?
+//				return org.apache.lucene.search.NumericRangeQuery.newLongRange(field, Long.parseLong(a), Long.parseLong(b), true, false);
+//			}
         } else if (null != tryParseDate(value)) {
             if (schema.getField(field).getType() instanceof TrieDateField) {
                 return new TrieDateField().getFieldQuery(null, schema.getField(field), value);
@@ -738,7 +745,9 @@ public class GroupByComponent extends SearchComponent {
                     query.add(extractQuery(schema, fq, null), Occur.MUST);
                 }
             }
-            query.add(extractQuery(schema, termKey, termValue), Occur.MUST);
+            BooleanQuery bq = new BooleanQuery();
+            bq.add(new BooleanClause(extractQuery(schema, termKey, termValue), Occur.MUST));
+            return bq; 
         }
         return query;
 

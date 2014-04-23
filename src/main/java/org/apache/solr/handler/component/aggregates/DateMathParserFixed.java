@@ -120,25 +120,25 @@ public class DateMathParserFixed {
      * @see #CALENDAR_UNITS
      */
     public static DateTime add(DateTime c, int val, String unit) {
-        if (unit.equalsIgnoreCase("YEAR")) {
+        if (unit.equalsIgnoreCase("YEAR") || unit.equalsIgnoreCase("YEARS")) {
             return c.plusYears(val);
         }
-        if (unit.equalsIgnoreCase("MONTH")) {
+        if (unit.equalsIgnoreCase("MONTH") || unit.equalsIgnoreCase("MONTHS")) {
             return c.plusMonths(val);
         }
-        if (unit.equalsIgnoreCase("DAY")) {
+        if (unit.equalsIgnoreCase("DAY") || unit.equalsIgnoreCase("DAYS")) {
             return c.plusDays(val);
         }
-        if (unit.equalsIgnoreCase("HOUR")) {
+        if (unit.equalsIgnoreCase("HOUR") || unit.equalsIgnoreCase("HOURS")) {
             return c.plusHours(val);
         }
-        if (unit.equalsIgnoreCase("MINUTE")) {
+        if (unit.equalsIgnoreCase("MINUTE") || unit.equalsIgnoreCase("MINUTES")) {
             return c.plusMinutes(val);
         }
-        if (unit.equalsIgnoreCase("SECOND")) {
+        if (unit.equalsIgnoreCase("SECOND") || unit.equalsIgnoreCase("SECONDS")) {
             return c.plusSeconds(val);
         }
-        if (unit.equalsIgnoreCase("WEEK")) {
+        if (unit.equalsIgnoreCase("WEEK") || unit.equalsIgnoreCase("WEEKS")) {
             return c.plusWeeks(val);
         }
         throw new IllegalArgumentException("Adding Unit not recognized: " + unit);
@@ -152,25 +152,25 @@ public class DateMathParserFixed {
      * @see #CALENDAR_UNITS
      */
     public static DateTime round(DateTime c, String unit) {
-        if (unit.equalsIgnoreCase("YEAR")) {
-            return c.withTimeAtStartOfDay().withMonthOfYear(1);
+        if (unit.equalsIgnoreCase("YEAR") || unit.equalsIgnoreCase("YEARS")) {
+            return c.withTimeAtStartOfDay().withDayOfYear(1).withMonthOfYear(1);
         }
-        if (unit.equalsIgnoreCase("MONTH")) {
+        if (unit.equalsIgnoreCase("MONTH") || unit.equalsIgnoreCase("MONTHS")) {
             return c.withTimeAtStartOfDay().withDayOfMonth(1);
         }
-        if (unit.equalsIgnoreCase("DAY")) {
+        if (unit.equalsIgnoreCase("DAY") || unit.equalsIgnoreCase("DAYS")) {
             return c.withTimeAtStartOfDay();
         }
-        if (unit.equalsIgnoreCase("HOUR")) {
+        if (unit.equalsIgnoreCase("HOUR") || unit.equalsIgnoreCase("HOURS")) {
             return c.withMinuteOfHour(0).withSecondOfMinute(0).withMillis(0);
         }
-        if (unit.equalsIgnoreCase("MINUTE")) {
+        if (unit.equalsIgnoreCase("MINUTE") || unit.equalsIgnoreCase("MINUTES")) {
             return c.withSecondOfMinute(0).withMillis(0);
         }
-        if (unit.equalsIgnoreCase("SECOND")) {
+        if (unit.equalsIgnoreCase("SECOND") || unit.equalsIgnoreCase("SECONDS")) {
             return c.withMillis(0);
         }
-        if (unit.equalsIgnoreCase("WEEK")) {
+        if (unit.equalsIgnoreCase("WEEK") || unit.equalsIgnoreCase("WEEKS")) {
             return c.withDayOfWeek(1);
         }
         System.out.println("Rounding Unit not recognized: " + unit);
@@ -196,8 +196,9 @@ public class DateMathParserFixed {
      * 
      * @see #getNow
      */
-    public void setNow(DateTime n) {
+    public DateMathParserFixed setNow(DateTime n) {
         now = n;
+        return this;
     }
 
     /**
