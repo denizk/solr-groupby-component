@@ -217,7 +217,6 @@ public class GroupByComponent extends SearchComponent {
             	docs = docs.intersection(contrained_set_of_documents);
             }
             facets = doFacets(field, docs, req, params);
-            // facets = new SimpleFacets(req, docs, params).getTermCounts(field);
         }
 
         SimpleOrderedMap<Object> results = new SimpleOrderedMap<Object>();
@@ -726,9 +725,7 @@ public class GroupByComponent extends SearchComponent {
                     query.add(extractQuery(schema, fq, null), Occur.MUST);
                 }
             }
-            BooleanQuery bq = new BooleanQuery();
-            bq.add(new BooleanClause(extractQuery(schema, termKey, termValue), Occur.MUST));
-            return bq; 
+            query.add(extractQuery(schema, termKey, termValue), Occur.MUST);
         }
         return query;
 

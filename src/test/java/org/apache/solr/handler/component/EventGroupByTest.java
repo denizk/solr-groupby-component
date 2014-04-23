@@ -205,6 +205,29 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         
         assertEquals(XPathHelper.getText(xml, "//lst[@name='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']//long[@name='intersect']"), "1");
         assertEquals(XPathHelper.getText(xml, "//lst[@name='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']//long[@name='union']"), "2");
+    }
+    
+    @Test
+    public void should_be_able_to_group_by_date_range_with_filter() throws Exception {
+        ModifiableSolrParams p = new ModifiableSolrParams();
+        p.set("q", "*:*");
+        p.set("fq", "type:\"media_delivery\" && cid:\"12341234\"");
+        p.set("wt", "xml");
+        p.set("rows", "0");
+        p.set("indent", "true");
+        // date (day), (hour), (week), (month)
+        p.set(GroupByComponent.Params.GROUPBY, "dt,cid");
+        p.set(GroupByComponent.Params.DISTINCT, "true");
+        p.set(GroupByComponent.Params.FILTER, "true");
+        p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-01-01T00:00:00Z/YEAR-1YEAR");
+        p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-01-3T00:00:00Z/YEAR+1YEAR");
+        p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1YEAR");
+        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
+        String xml = h.query(req);
+        System.out.println(xml);
+        
+        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='total']"), "2");
 
     }
     
