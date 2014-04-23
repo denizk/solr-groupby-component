@@ -153,10 +153,10 @@ public class DateMathParserFixed {
      */
     public static DateTime round(DateTime c, String unit) {
         if (unit.equalsIgnoreCase("YEAR") || unit.equalsIgnoreCase("YEARS")) {
-            return c.withTimeAtStartOfDay().withDayOfYear(1).withMonthOfYear(1);
+            return c.withTimeAtStartOfDay().withDayOfYear(1).withMonthOfYear(1).withTimeAtStartOfDay();
         }
         if (unit.equalsIgnoreCase("MONTH") || unit.equalsIgnoreCase("MONTHS")) {
-            return c.withTimeAtStartOfDay().withDayOfMonth(1);
+            return c.withTimeAtStartOfDay().withDayOfMonth(1).withTimeAtStartOfDay();
         }
         if (unit.equalsIgnoreCase("DAY") || unit.equalsIgnoreCase("DAYS")) {
             return c.withTimeAtStartOfDay();
@@ -171,7 +171,7 @@ public class DateMathParserFixed {
             return c.withMillis(0);
         }
         if (unit.equalsIgnoreCase("WEEK") || unit.equalsIgnoreCase("WEEKS")) {
-            return c.withDayOfWeek(1);
+            return c.withDayOfWeek(1).withTimeAtStartOfDay();
         }
         System.out.println("Rounding Unit not recognized: " + unit);
         throw new IllegalArgumentException("Rounding Unit not recognized: " + unit);
