@@ -205,6 +205,10 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
+        
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']//long[@name='intersect']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']//long[@name='union']"), "2");
+
     }
     
     @Test
@@ -217,13 +221,29 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         // date (day), (hour), (week), (month)
         p.set(GroupByComponent.Params.GROUPBY, "dt,cid");
         p.set(GroupByComponent.Params.DISTINCT, "true");
-        p.set(GroupByComponent.Params.MINCOUNT, "0");
-        p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-01-01T00:00:00Z/DAY-1DAY");
-        p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-01-3T00:00:00Z/DAY+1DAY");
+        p.set(GroupByComponent.Params.INTERSECT, "false");
+        p.set(GroupByComponent.Params.MINIMIZE, "false");
+        p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-01-01T00:00:00Z/WEEK-1WEEK");
+        p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-01-3T00:00:00Z/WEEK+1WEEK");
         p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1DAY");
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
+        
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst").getLength(), 14);	// 14 days
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-23T00:00:00Z TO 2013-12-24T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-24T00:00:00Z TO 2013-12-25T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-25T00:00:00Z TO 2013-12-26T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-26T00:00:00Z TO 2013-12-27T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-27T00:00:00Z TO 2013-12-28T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-28T00:00:00Z TO 2013-12-29T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-29T00:00:00Z TO 2013-12-30T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-30T00:00:00Z TO 2013-12-31T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-31T00:00:00Z TO 2014-01-01T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-01T00:00:00Z TO 2014-01-02T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-03T00:00:00Z TO 2014-01-04T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-04T00:00:00Z TO 2014-01-05T00:00:00Z]']").getLength(), 1);
     }
     
     @Test

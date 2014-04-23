@@ -113,6 +113,8 @@ public class GroupByComponent extends SearchComponent {
         public static final String INTERSECT = "groupby.intersect";
 
         public static final String MINCOUNT = "groupby.mincount";
+        
+        public static final String MINIMIZE = "groupby.minimize";
 
         public static final String PERCENTILES = "groupby.stats.percentiles";
 
@@ -251,8 +253,8 @@ public class GroupByComponent extends SearchComponent {
         	ModifiableSolrParams x = new ModifiableSolrParams(params);
         	x.set("facet", true);
         	x.set("facet.date", fieldName);
-        	x.set("facet.date.start", start_range);
-        	x.set("facet.date.end", end_range);
+        	x.set("facet.date.start", DateMathParserFixed.toIsoFormat(DateMathParserFixed.extract(null, start_range)));
+        	x.set("facet.date.end", DateMathParserFixed.toIsoFormat(DateMathParserFixed.extract(null, end_range)));
         	x.set("facet.date.gap", gap);
         	
         	try {
@@ -390,7 +392,7 @@ public class GroupByComponent extends SearchComponent {
         SolrIndexSearcher indexSearcher = req.getSearcher();
 
         for (Map.Entry<String, Integer> parent : parents) {	// facets to iterate over (date ranges inclusive)
-            if (parent.getValue() < params.getInt(Params.MINCOUNT, 1)) {
+            if (parent.getValue() <= 0 && params.getBool(Params.MINIMIZE, true)) {
                 continue; // do not collect children when parent is 0
             }
 
@@ -489,7 +491,7 @@ public class GroupByComponent extends SearchComponent {
                     }
                     
                     // check if we have distinct, and if so, are we last item? if so, then only return unique items
-                    if (params.getParams(Params.DISTINCT) != null && params.getBool(Params.INTERSECT, true) && queue.size() <= 0) {
+                    if (params.getParams(Params.DISTINCT) != null && queue.size() <= 0) {
                     	// count them up in a rough sketch
                     	HyperLogLog hll = new HyperLogLog(16);
                     	Integer count = 0;
@@ -498,9 +500,11 @@ public class GroupByComponent extends SearchComponent {
                     		count += child.getValue();
                     	}
                     	NamedList<Object> n = new NamedList<Object>();
-                    	n.add("unique", hll.cardinality());
+                    	n.add("unique", children.size() <= 0 ? 0 : hll.cardinality());
                     	n.add("total", count);
-                    	n.add("hll", hll);
+                    	if (params.getBool(Params.INTERSECT, true)) {
+                    		n.add("hll", hll);
+                    	}
                     	String fieldName = nextField;
                         if (hasBlockJoinHint(fieldName)) {
                         	fieldName = fieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
