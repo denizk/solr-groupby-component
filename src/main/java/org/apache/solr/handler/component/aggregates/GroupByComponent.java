@@ -480,7 +480,12 @@ public class GroupByComponent extends SearchComponent {
                     if (hasBlockJoinHint(parentField)) {
                         clone.add(parentField.split(BLOCK_JOIN_PATH_HINT)[0] + "/" + parentField.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0] + ":" + parent.getKey());
                     } else {
-                        clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
+                    	// are we a range query?
+                    	if (parent.getKey().matches("^.*:\\[.*\\sTO\\s.*\\]$")) {
+                    		clone.add(parent.getKey());
+                    	} else {
+                    		clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
+                    	}
                     }
                     
                     // check if we have distinct, and if so, are we last item? if so, then only return unique items
