@@ -89,6 +89,10 @@ public class GroupByComponent extends SearchComponent {
         
         public static final String STATS = "groupby.stats";
         
+        /**
+         * By default true, will return the distinct counts at the lowest
+         * level in the group by.
+         */
         public static final String DISTINCT = "groupby.distinct";
         
         public static final String RANGE = "groupby.range";
@@ -97,6 +101,11 @@ public class GroupByComponent extends SearchComponent {
         
         public static final String SIZE = "groupby.size";
         
+        /**
+         * If you would like the groupby function to take into account
+         * any active filters (fq, q). By default groupby does not take
+         * into account filters.
+         */
         public static final String FILTER = "groupby.filter";
         
         /**
@@ -104,16 +113,40 @@ public class GroupByComponent extends SearchComponent {
          */
         public static final String PIVOT = "groupby.pivot";
         
+        /**
+         * If you would like to take each group and interect them at the same
+         * level to create a hierarchy representing the set/intersect/union
+         * between all possible combinations. (WARNING: will return all data,
+         * however, use with distinct to create nice "unique vs. total" counts)
+         */
         public static final String INTERSECT = "groupby.intersect";
 
+        /**
+         * The minimum count to be returned, by default 1
+         */
         public static final String MINCOUNT = "groupby.mincount";
         
+        /**
+         * Define size/cardinality accuracy (trade speed/memory vs. accuracy) defaults to 12
+         */
         public static final String SKETCH_SIZE = "sketch.size";
         
+        /**
+         * Minimize the results (removing 0 counts, where one can infer). For example
+         * performing a range groupby date for an entire year, by default we remove
+         * all dates that dont have any data, if you would like to return all data
+         * then set this to false
+         */
         public static final String MINIMIZE = "groupby.minimize";
 
+        /**
+         * Runs the percentiles for the specified field identified in percentiles.
+         */
         public static final String PERCENTILES = "groupby.stats.percentiles";
 
+        /**
+         * Specifies how much compression to use when generating percentiles using QDigest.
+         */
         public static final String PERCENTILES_COMPRESSION = "groupby.stats.percentiles.compression";
 
         /**
@@ -439,14 +472,14 @@ public class GroupByComponent extends SearchComponent {
 							Object hllObj = x.get("hll");
 							if (hllObj != null) {
 								union.children.put(facet, (HyperLogLog)hllObj);
-								union.child_nodes.put(facet, node);
+								union.child_nodes.put(key, x);
 							}
 						}
-					} 
+					}
 					if (item.get("hll") != null) {
 						union.children.put(facet, (HyperLogLog)item.get("hll"));
-						union.child_nodes.put(facet, item);
 					}
+					union.child_nodes.put(facet, item);
 				}
 			});
 	        // we now have distincts at each level, time to cross-multiply them
@@ -475,12 +508,19 @@ public class GroupByComponent extends SearchComponent {
 						HyperLogLog set_a_child = setA.children.get(entry);
 						long count_of_a_child = set_a_child.cardinality();
 						NamedList<Object> child_sets = new NamedList<Object>();
+						
+						if (setA.child_nodes.get(entry).get("pivot") != null) {
+							child_sets = ((NamedList<Object>)setA.child_nodes.get(entry).get("pivot"));
+						} else {
+							setA.child_nodes.get(entry).add("pivot", child_sets);
+						}
+						
 						if (setB.children.containsKey(entry)) {
 							HyperLogLog set_b_child = setB.children.get(entry);
 							long count_of_b_child = set_b_child.cardinality();
 							long union_of_a_child_b_child = set_a_child.merge(set_b_child).cardinality();
 							long intersection_of_a_child_b_child = (count_of_a_child + count_of_b_child) - union_of_a_child_b_child;
-							// TODO add to each match or create...
+
 							NamedList<Object> child_set = new NamedList<Object>();
 							child_set.add("intersect", intersection_of_a_child_b_child);
 							child_set.add("union", union_of_a_child_b_child);
@@ -488,7 +528,6 @@ public class GroupByComponent extends SearchComponent {
 							child_sets.add(key_b, child_set);
 						}
 						covered.add(entry);
-						setA.child_nodes.get(entry).add("pivot", child_sets);
 					}
 					for (String entry : setB.children.keySet()) {
 						if (covered.contains(entry)) continue;

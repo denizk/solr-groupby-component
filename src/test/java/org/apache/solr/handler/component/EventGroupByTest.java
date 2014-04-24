@@ -408,6 +408,17 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("network_id", "1");
         assertU(adoc(doc));
         
+        doc = new SolrInputDocument();
+        doc.addField("id", "6");
+        doc.addField("type", "impression");
+        doc.addField("cid", 88888888L);
+        doc.addField("dt", "2014-01-06T12:00:00Z");
+        doc.addField("source_ids", "0000000");
+        doc.addField("source_ids", "1111111");
+        doc.addField("site_id", "1");
+        doc.addField("network_id", "1");
+        assertU(adoc(doc));
+        
         assertU(commit());
     }
 }
