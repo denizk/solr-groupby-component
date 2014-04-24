@@ -10,8 +10,10 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.Map.Entry;
+import java.util.UUID;
 
 import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.Term;
@@ -53,6 +55,7 @@ import com.clearspring.analytics.stream.cardinality.CardinalityMergeException;
 import com.clearspring.analytics.stream.cardinality.HyperLogLog;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -95,6 +98,11 @@ public class GroupByComponent extends SearchComponent {
         public static final String SIZE = "groupby.size";
         
         public static final String FILTER = "groupby.filter";
+        
+        /**
+         * Computes the intersection at all levels given all permutations.
+         */
+        public static final String PIVOT = "groupby.pivot";
         
         public static final String INTERSECT = "groupby.intersect";
 
@@ -224,7 +232,7 @@ public class GroupByComponent extends SearchComponent {
         results.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
         
         if (params.getBool(Params.DISTINCT, false) && params.getBool(Params.INTERSECT, true)) {
-            intersect(results);
+            intersect(results, params);
         }
 
         return results;
@@ -294,11 +302,12 @@ public class GroupByComponent extends SearchComponent {
     }
     
     @SuppressWarnings("unchecked")
-	private void intersect(final SimpleOrderedMap<Object> results) {
+	private void intersect(final SimpleOrderedMap<Object> results, SolrParams params) {
         try {
             for (Entry<String, Object> entry : results) {
                 if (entry.getValue() instanceof List<?>) {
-                    collectHLL((List<NamedList<Object>>)entry.getValue());
+                    collectHLL(null, (List<NamedList<Object>>)entry.getValue(), params);
+                    clean((List<NamedList<Object>>)entry.getValue());
                 }
             }
         } catch (CardinalityMergeException e) {
@@ -308,32 +317,187 @@ public class GroupByComponent extends SearchComponent {
         }
     }
     
+    private static interface HyperLogLogCollector {
+    	void collect(NamedList<Object> item, HyperLogLog hll) throws CardinalityMergeException;
+    }
+    
+    private void iterateHLL(List<NamedList<Object>> items, HyperLogLogCollector collector) {
+    	// merge them up and across parents
+        for (NamedList<Object> item : items) {
+			// iterate and cross join
+			if (item.get("hll") != null) {
+				HyperLogLog hll = (HyperLogLog)item.get("hll");
+				try {
+					collector.collect(item, hll);
+				} catch (CardinalityMergeException ex) {
+					throw new RuntimeException(ex);
+				}
+			}
+		}
+    }
+    
+    private class HyperLogLogUnion {
+    	HyperLogLog root;
+    	HashMap<String, HyperLogLog> children = new HashMap<String, HyperLogLog>();
+    	HashMap<String, NamedList<Object>> child_nodes = new HashMap<String, NamedList<Object>>();
+    	NamedList<Object> node;
+    }
+    
+    private void clean(final List<NamedList<Object>> list) {
+    	for (NamedList<Object> p : list) {
+    		if (p.get("group") != null) {
+    			Object o = p.get("group");
+    			if (o instanceof List<?>) {
+    				clean((List<NamedList<Object>>)o);
+            	} else if (o != null) {
+            		NamedList<Object> v = (NamedList<Object>)o;
+	                for (Entry<String, Object> entry : v) {
+						if (entry.getValue() instanceof List<?>) {
+							clean((List<NamedList<Object>>)entry.getValue());
+						}
+					}
+					v.remove("hll");
+					v.remove("xyz");
+					v.remove("ancestor");
+					if (v.get("join") != null) {
+						NamedList<Object> join = (NamedList<Object>)v.get("join");
+						if (join.iterator().hasNext()) {
+							NamedList<Object> details = ((NamedList<Object>)join.getVal(0));
+							details.remove("hll");
+							details.remove("xyz");
+							details.remove("ancestor");
+						}
+					}
+            	} else {
+            		System.out.println(o);
+            	}
+    		}
+			p.remove("hll");
+			p.remove("xyz");
+			p.remove("ancestor");
+			if (p.get("join") != null) {
+				NamedList<Object> join = (NamedList<Object>)p.get("join");
+				join.remove("hll");
+				join.remove("xyz");
+				join.remove("ancestor");
+			}
+    	}
+    }
+    
     // walk tree and collect all HLL matrix to create intersection (possible to do intersects at every level) which
     // could be great... pivot {A,B,C} => intersects at C level, B level, and A level
     @SuppressWarnings("unchecked")
-	private void collectHLL(List<NamedList<Object>> list) throws CardinalityMergeException, IOException {
+	private List<NamedList<Object>> collectHLL(final NamedList<Object> parent, final List<NamedList<Object>> list, final SolrParams params) throws CardinalityMergeException, IOException {
         HashMap<NamedList<Object>, HyperLogLog> matrix = new HashMap<NamedList<Object>, HyperLogLog>();
         
+        final HashMap<String, NamedList<Object>> nodesBYName = new HashMap<String, NamedList<Object>>();
+        
+        List<NamedList<Object>> collectHLL = new ArrayList<NamedList<Object>>();
         for (NamedList<Object> p : list) {
+        	nodesBYName.put(p.get("value").toString(), p);
             if (p.get("group") != null) {
             	Object o = p.get("group");
             	if (o instanceof List<?>) {
-            		collectHLL((List<NamedList<Object>>)o);
+            		collectHLL.addAll(collectHLL(p, (List<NamedList<Object>>)o, params));
             	} else if (o != null) {
 	                // found it
 	                NamedList<Object> v = (NamedList<Object>)o;
 	                for (Entry<String, Object> entry : v) {
 						if (entry.getValue() instanceof List<?>) {
-							collectHLL((List<NamedList<Object>>)entry.getValue());
+							collectHLL.addAll(collectHLL(p, (List<NamedList<Object>>)entry.getValue(), params));
 						}
 					}
 	                if (v.get("hll") != null) {
+	                	v.add("xyz", p.get("value").toString());
 	                    HyperLogLog x = (HyperLogLog)v.get("hll");
-	                    v.add("parent", p.get("value"));
 	                    matrix.put(v, x);
+	                    if (parent != null) {
+	                    	p.add("ancestor", parent.get("value").toString());
+	                    }
+	                    collectHLL.add(p);
 	                }
             	}
             }
+        }
+        
+        if (params.getBool(Params.PIVOT, false)) {
+	        final HashMap<String, HyperLogLogUnion> pivot = new HashMap<String, HyperLogLogUnion>();
+	        iterateHLL(collectHLL, new HyperLogLogCollector() {
+				public void collect(NamedList<Object> item, HyperLogLog hll) throws CardinalityMergeException {
+					String key = item.get("ancestor").toString();
+					String facet = item.get("xyz").toString();
+					if (false == pivot.containsKey(key)) {
+						pivot.put(key, new HyperLogLogUnion());
+					}
+					HyperLogLogUnion union = pivot.get(key);
+					union.root = union.root != null ? (HyperLogLog)union.root.merge(hll) : hll;
+					union.node = nodesBYName.get(key);
+					if (item.get("join") != null) {
+						NamedList<Object> node = (NamedList<Object>)item.get("join");
+						if (node.get(key) != null) {
+							NamedList<Object> x = (NamedList<Object>)node.get(key);
+							Object hllObj = x.get("hll");
+							if (hllObj != null) {
+								union.children.put(facet, (HyperLogLog)hllObj);
+								union.child_nodes.put(facet, node);
+							}
+						}
+					} 
+					if (item.get("hll") != null) {
+						union.children.put(facet, (HyperLogLog)item.get("hll"));
+						union.child_nodes.put(facet, item);
+					}
+				}
+			});
+	        // we now have distincts at each level, time to cross-multiply them
+	        for (String key_a : pivot.keySet()) {
+	        	HyperLogLogUnion setA = pivot.get(key_a);
+	        	long count_of_a = setA.root.cardinality();
+	        	NamedList<Object> sets = new NamedList<Object>();
+				// now we have top most parent which contains group[] array
+				// we get root intersect/merge
+				for (String key_b : pivot.keySet()) {
+					if (key_a == key_b) {
+						continue;
+					}
+					HyperLogLogUnion setB = pivot.get(key_b);
+					long count_of_b = setB.root.cardinality();
+					long union_a_b = setA.root.merge(setB.root).cardinality();
+					long intersection_a_b = (count_of_a + count_of_b) - union_a_b;
+					NamedList<Object> set = new NamedList<Object>();
+					set.add("intersect", intersection_a_b);
+					set.add("union", union_a_b);
+					set.add("total", count_of_a + count_of_b);
+					sets.add(key_b, set);
+					
+					Set<String> covered = Sets.newHashSet();
+					for (String entry : setA.children.keySet()) {
+						HyperLogLog set_a_child = setA.children.get(entry);
+						long count_of_a_child = set_a_child.cardinality();
+						NamedList<Object> child_sets = new NamedList<Object>();
+						if (setB.children.containsKey(entry)) {
+							HyperLogLog set_b_child = setB.children.get(entry);
+							long count_of_b_child = set_b_child.cardinality();
+							long union_of_a_child_b_child = set_a_child.merge(set_b_child).cardinality();
+							long intersection_of_a_child_b_child = (count_of_a_child + count_of_b_child) - union_of_a_child_b_child;
+							// TODO add to each match or create...
+							NamedList<Object> child_set = new NamedList<Object>();
+							child_set.add("intersect", intersection_of_a_child_b_child);
+							child_set.add("union", union_of_a_child_b_child);
+							child_set.add("total", count_of_a_child + count_of_b_child);
+							child_sets.add(key_b, child_set);
+						}
+						covered.add(entry);
+						setA.child_nodes.get(entry).add("pivot", child_sets);
+					}
+					for (String entry : setB.children.keySet()) {
+						if (covered.contains(entry)) continue;
+						// setA does not contain what is in setB, so we can safely zero it all out
+						System.out.println("zero out " + entry);
+					}
+				}
+				setA.node.add("pivot", sets);
+			}
         }
         
         HashMap<NamedList<Object>, SimpleOrderedMap<Object>> sets = new HashMap<NamedList<Object>, SimpleOrderedMap<Object>>();
@@ -349,12 +513,13 @@ public class GroupByComponent extends SearchComponent {
                 	continue;
                 }
                 
-                // are there zeros on either side
+                // are there zeros on either side if so we can just assume empty hll and move on
                 if ((Integer)a.get("total") <= 0 || (Integer)b.get("total") <= 0) {
 	                NamedList<Object> set = new NamedList<Object>();
 	                set.add("intersect", 0);
-	                set.add("union", (Integer)a.get("total") + (Integer)b.get("total"));                
-	                wrap.add((String)b.get("parent"), set);
+	                set.add("union", (Integer)a.get("total") + (Integer)b.get("total"));
+	                set.add("total", (Integer)a.get("total") + (Integer)b.get("total"));
+	                wrap.add(b.get("xyz").toString(), set);
                 } else {
 	                HyperLogLog union = (HyperLogLog)hll_A.merge(hll_B);
 	                long union_count = union.cardinality();
@@ -362,18 +527,24 @@ public class GroupByComponent extends SearchComponent {
 	                long inclusion_exclusion_principle_instersect = total_count - union_count;
 	                NamedList<Object> set = new NamedList<Object>();
 	                set.add("intersect", inclusion_exclusion_principle_instersect);
-	                set.add("union", union_count);                
-	                wrap.add((String)b.get("parent"), set);
+	                set.add("union", union_count);
+	                set.add("total", total_count);
+	                set.add("hll", union);
+	                wrap.add(b.get("xyz").toString(), set);
                 }
             }
             sets.put(a, wrap);
         }
         
+        List<NamedList<Object>> yield = new ArrayList<NamedList<Object>>();
         for (NamedList<Object> item : sets.keySet()) {
         	item.add("join", sets.get(item));
-        	item.remove("parent");
-        	item.remove("hll");
+        	if (parent != null) {
+        		item.add("ancestor", parent.get("value").toString());
+        	}
+        	yield.add(item);
 		}
+        return yield;
     }
 
     @SuppressWarnings("unchecked")
@@ -466,13 +637,13 @@ public class GroupByComponent extends SearchComponent {
                         String[] filter = fieldName.split(":");
                         Query sub = extractQuery(schema, fieldName, null);
                         fieldName = filter[0];
-                        children = new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
+                        children = doFacets(fieldName, indexSearcher.getDocSet(sub, intersection), req, params); //new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
                     } else {
-                        children = new SimpleFacets(req, intersection, params).getTermCounts(fieldName);
+                        children = doFacets(fieldName, intersection, req, params);// new SimpleFacets(req, intersection, params).getTermCounts(fieldName);
                     }
 
                 } else {
-                    children = new SimpleFacets(req, intersection, params).getTermCounts(nextField);
+                    children = doFacets(nextField, intersection, req, params);//new SimpleFacets(req, intersection, params).getTermCounts(nextField);
                 }
 
                 if (children.size() >= 0) {
