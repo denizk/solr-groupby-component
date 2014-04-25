@@ -20,7 +20,7 @@ This component implements a custom SearchComponent and can be registered in your
 
 > This component is released under apache licenese. Use at your own discretion, this author takes no liability for anything, at all, ever and makes no guarantees about the software provided.
 
-# Latest #
+# Latest 4/25/2014 #
 
 + Updated API to support date range group bys (useful for time-window based group bys, for example sliding window analysis, etc)
 + Updated API to support regular lucene fields
@@ -31,7 +31,8 @@ This component implements a custom SearchComponent and can be registered in your
 
 + Distributed Support (QDigest, HyperLogLog, etc)
 + Add Distinct(...), Having(...)
-+ Aggregate Filters (already checked in but need some tweaks)
++ Aggregate Filters (already checked in but need some tweaks) (having sum(x) > 10)
++ Optimize/Performance - we could reduce memory overhead by iterating distincts using pagination (grab 1000 facets at a time, and store into HyperLogLog rather than load all of them at once using SimpleFacets).
 
 # What it can do #
 
