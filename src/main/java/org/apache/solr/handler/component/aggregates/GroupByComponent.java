@@ -13,12 +13,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.Map.Entry;
-import java.util.UUID;
-
 import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.search.BooleanClause;
 import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.CachingWrapperFilter;
 import org.apache.lucene.search.Query;
@@ -371,7 +368,7 @@ public class GroupByComponent extends SearchComponent {
     
     private class HyperLogLogUnion {
     	HyperLogLog root;
-    	HashMap<String, HyperLogLog> children = new HashMap<String, HyperLogLog>();
+    	HashMap<String, HyperLogLogUnion> children = new HashMap<String, HyperLogLogUnion>();
     	HashMap<String, NamedList<Object>> child_nodes = new HashMap<String, NamedList<Object>>();
     	NamedList<Object> node;
     }
@@ -420,39 +417,34 @@ public class GroupByComponent extends SearchComponent {
     // walk tree and collect all HLL matrix to create intersection (possible to do intersects at every level) which
     // could be great... pivot {A,B,C} => intersects at C level, B level, and A level
     @SuppressWarnings("unchecked")
-	private List<NamedList<Object>> collectHLL(final NamedList<Object> parent, final List<NamedList<Object>> list, final SolrParams params) throws CardinalityMergeException, IOException {
-        HashMap<NamedList<Object>, HyperLogLog> matrix = new HashMap<NamedList<Object>, HyperLogLog>();
-        
-        final HashMap<String, NamedList<Object>> nodesBYName = new HashMap<String, NamedList<Object>>();
-        
-        List<NamedList<Object>> collectHLL = new ArrayList<NamedList<Object>>();
+	private HyperLogLogUnion collectHLL(NamedList<Object> parent, final List<NamedList<Object>> list, final SolrParams params) throws CardinalityMergeException, IOException {
+        HyperLogLogUnion union = new HyperLogLogUnion();
+        union.node = parent;
+        union.root = new HyperLogLog(params.getInt(Params.SKETCH_SIZE, 12));
+
         for (NamedList<Object> p : list) {
-        	nodesBYName.put(p.get("value").toString(), p);
+            System.out.println(p);
             if (p.get("group") != null) {
             	Object o = p.get("group");
             	if (o instanceof List<?>) {
-            		collectHLL.addAll(collectHLL(p, (List<NamedList<Object>>)o, params));
+            	    collectHLL(p, (List<NamedList<Object>>)o, params);
             	} else if (o != null) {
-	                // found it
 	                NamedList<Object> v = (NamedList<Object>)o;
 	                for (Entry<String, Object> entry : v) {
 						if (entry.getValue() instanceof List<?>) {
-							collectHLL.addAll(collectHLL(p, (List<NamedList<Object>>)entry.getValue(), params));
+							collectHLL(p, (List<NamedList<Object>>)entry.getValue(), params);
 						}
 					}
 	                if (v.get("hll") != null) {
 	                	v.add("xyz", p.get("value").toString());
-	                    HyperLogLog x = (HyperLogLog)v.get("hll");
-	                    matrix.put(v, x);
-	                    if (parent != null) {
-	                    	p.add("ancestor", parent.get("value").toString());
-	                    }
-	                    collectHLL.add(p);
 	                }
             	}
             }
         }
         
+        return union;
+        
+        /*
         if (params.getBool(Params.PIVOT, false)) {
 	        final HashMap<String, HyperLogLogUnion> pivot = new HashMap<String, HyperLogLogUnion>();
 	        iterateHLL(collectHLL, new HyperLogLogCollector() {
@@ -584,6 +576,7 @@ public class GroupByComponent extends SearchComponent {
         	yield.add(item);
 		}
         return yield;
+        */
     }
 
     @SuppressWarnings("unchecked")

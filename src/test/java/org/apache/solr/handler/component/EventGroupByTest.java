@@ -305,9 +305,9 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='count']"), "5");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='count']"), "6");
         assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//long[@name='unique']"), "2");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='total']"), "5");
+        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='total']"), "6");
     }
     
     @Test
