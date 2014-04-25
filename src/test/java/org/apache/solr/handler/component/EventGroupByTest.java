@@ -50,11 +50,11 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='1']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='1']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
         
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 2L);       
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='99']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='99']/lst[@name='media_delivery']/long[@name='union']").longValue(), 1L);       
     }
     
     @Test
@@ -129,11 +129,11 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         // we should have 2 unique shoppers
         assertEquals(XPathHelper.query(xml, "//arr[@name='network_id']").getLength(), 1);
         assertEquals(XPathHelper.query(xml, "//arr[@name='site_id']").getLength(), 2);
-        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']").getLength(), 2);
-        assertEquals(XPathHelper.query(xml, "//str[text()='conversion']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='type']/lst/str[text()='media_delivery']").getLength(), 2);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='type']/lst/str[text()='conversion']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//str[text()='conversion']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='media_delivery']/..//long[@name='unique']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//arr[@name='type']/lst/str[text()='conversion']/..//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//arr[@name='type']/lst/str[text()='media_delivery']/..//long[@name='unique']"), "2");
     }
     
     @Test
@@ -151,16 +151,16 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
       
 
         assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='111111']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='222222']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='2222222']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='333333']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='0000000']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='111111']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='222222']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='2222222']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='333333']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='0000000']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//str[text()='111111']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='111111']/..//int[@name='total']"), "2");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='222222']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='222222']/..//int[@name='total']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='111111']/..//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='111111']/..//int[@name='total']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='222222']/..//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='222222']/..//int[@name='total']"), "2");
     }
     
     @Test
@@ -220,7 +220,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-01-01T00:00:00Z/DAY-1DAY");
         p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-01-3T00:00:00Z/DAY+1DAY");
         p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1DAY");
-        p.set(GroupByComponent.Params.SKETCH_SIZE, "16");
+        p.set(GroupByComponent.Params.ESTIMATE_SIZE, "16");
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);
@@ -328,21 +328,6 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         System.out.println(xml);
     }
     
-    @Test
-    public void should_be_able_to_intersect_and_cross_join() throws Exception {
-        ModifiableSolrParams p = new ModifiableSolrParams();
-        p.set("q", "*:*");
-        p.set("wt", "xml");
-        p.set("rows", "0");
-        p.set("indent", "true");
-        p.set(GroupByComponent.Params.GROUPBY, "type,network_id,cid");
-        p.set(GroupByComponent.Params.DISTINCT, "true");
-        p.set(GroupByComponent.Params.PIVOT, "true");
-        SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
-        String xml = h.query(req);
-        System.out.println(xml);
-    }
-    
     protected void setupIndex() throws IOException {
         GroupByComponent c = (GroupByComponent) h.getCore().getSearchComponents().get(GroupByComponent.COMPONENT_NAME);
         assertTrue(c instanceof GroupByComponent);
@@ -412,7 +397,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         doc.addField("id", "6");
         doc.addField("type", "impression");
         doc.addField("cid", 88888888L);
-        doc.addField("dt", "2014-01-06T12:00:00Z");
+        doc.addField("dt", "2014-01-10T12:00:00Z");
         doc.addField("source_ids", "0000000");
         doc.addField("source_ids", "1111111");
         doc.addField("site_id", "1");

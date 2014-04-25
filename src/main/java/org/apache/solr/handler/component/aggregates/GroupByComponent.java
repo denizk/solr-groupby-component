@@ -4,15 +4,14 @@ import java.io.IOException;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TimeZone;
 import java.util.Map.Entry;
+
 import org.apache.lucene.document.FieldType.NumericType;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
@@ -49,10 +48,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.clearspring.analytics.stream.cardinality.CardinalityMergeException;
+import com.clearspring.analytics.stream.cardinality.CountThenEstimate;
 import com.clearspring.analytics.stream.cardinality.HyperLogLog;
+import com.clearspring.analytics.stream.cardinality.ICardinality;
 import com.google.common.base.Function;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -124,9 +124,15 @@ public class GroupByComponent extends SearchComponent {
         public static final String MINCOUNT = "groupby.mincount";
         
         /**
-         * Define size/cardinality accuracy (trade speed/memory vs. accuracy) defaults to 12
+         * Defines the cutoff point where we will estimate the size of a set for cardinality
          */
-        public static final String SKETCH_SIZE = "sketch.size";
+        public static final String ESTIMATE_SIZE = "cardinality.estimate.size";
+        
+        /**
+         * Defines the EPS to use when running an estimate, the higher the number, the less
+         * accurate, but faster / less memory the computation will take.
+         */
+        public static final String ESTIMATE_PCT = "cardinality.estimate.eps";
         
         /**
          * Minimize the results (removing 0 counts, where one can infer). For example
@@ -269,7 +275,8 @@ public class GroupByComponent extends SearchComponent {
     }
 
     
-    private NamedList<Integer> doFacets(String fieldName, DocSet docs, SolrQueryRequest req, SolrParams params) throws IOException {
+    @SuppressWarnings({ "unchecked", "deprecation" })
+	private NamedList<Integer> doFacets(String fieldName, DocSet docs, SolrQueryRequest req, SolrParams params) throws IOException {
         // check of we are doing range facet
         String start_range = req.getParams().get(Params.RANGE + "." + fieldName + ".start");
         String end_range = req.getParams().get(Params.RANGE + "." + fieldName + ".end");
@@ -336,7 +343,8 @@ public class GroupByComponent extends SearchComponent {
         try {
             for (Entry<String, Object> entry : results) {
                 if (entry.getValue() instanceof List<?>) {
-                    collectHLL(null, (List<NamedList<Object>>)entry.getValue(), params);
+                    HyperLogLogUnion unions = collectHLL(null, (List<NamedList<Object>>)entry.getValue(), params);
+                    unions.collect();
                     clean((List<NamedList<Object>>)entry.getValue());
                 }
             }
@@ -347,33 +355,8 @@ public class GroupByComponent extends SearchComponent {
         }
     }
     
-    private static interface HyperLogLogCollector {
-    	void collect(NamedList<Object> item, HyperLogLog hll) throws CardinalityMergeException;
-    }
-    
-    private void iterateHLL(List<NamedList<Object>> items, HyperLogLogCollector collector) {
-    	// merge them up and across parents
-        for (NamedList<Object> item : items) {
-			// iterate and cross join
-			if (item.get("hll") != null) {
-				HyperLogLog hll = (HyperLogLog)item.get("hll");
-				try {
-					collector.collect(item, hll);
-				} catch (CardinalityMergeException ex) {
-					throw new RuntimeException(ex);
-				}
-			}
-		}
-    }
-    
-    private class HyperLogLogUnion {
-    	HyperLogLog root;
-    	HashMap<String, HyperLogLogUnion> children = new HashMap<String, HyperLogLogUnion>();
-    	HashMap<String, NamedList<Object>> child_nodes = new HashMap<String, NamedList<Object>>();
-    	NamedList<Object> node;
-    }
-    
-    private void clean(final List<NamedList<Object>> list) {
+    @SuppressWarnings("unchecked")
+	private void clean(final List<NamedList<Object>> list) {
     	for (NamedList<Object> p : list) {
     		if (p.get("group") != null) {
     			Object o = p.get("group");
@@ -384,32 +367,25 @@ public class GroupByComponent extends SearchComponent {
 	                for (Entry<String, Object> entry : v) {
 						if (entry.getValue() instanceof List<?>) {
 							clean((List<NamedList<Object>>)entry.getValue());
+						} else if (entry.getValue() instanceof NamedList<?>) {
+							NamedList<Object> x = (NamedList<Object>)entry.getValue();
+							x.remove("hll");
 						}
 					}
 					v.remove("hll");
-					v.remove("xyz");
-					v.remove("ancestor");
 					if (v.get("join") != null) {
 						NamedList<Object> join = (NamedList<Object>)v.get("join");
 						if (join.iterator().hasNext()) {
 							NamedList<Object> details = ((NamedList<Object>)join.getVal(0));
 							details.remove("hll");
-							details.remove("xyz");
-							details.remove("ancestor");
 						}
 					}
-            	} else {
-            		System.out.println(o);
             	}
     		}
 			p.remove("hll");
-			p.remove("xyz");
-			p.remove("ancestor");
 			if (p.get("join") != null) {
 				NamedList<Object> join = (NamedList<Object>)p.get("join");
 				join.remove("hll");
-				join.remove("xyz");
-				join.remove("ancestor");
 			}
     	}
     }
@@ -418,171 +394,51 @@ public class GroupByComponent extends SearchComponent {
     // could be great... pivot {A,B,C} => intersects at C level, B level, and A level
     @SuppressWarnings("unchecked")
 	private HyperLogLogUnion collectHLL(NamedList<Object> parent, final List<NamedList<Object>> list, final SolrParams params) throws CardinalityMergeException, IOException {
-        HyperLogLogUnion union = new HyperLogLogUnion();
-        union.node = parent;
-        union.root = new HyperLogLog(params.getInt(Params.SKETCH_SIZE, 12));
+        HyperLogLogUnion union = new HyperLogLogUnion(parent);
 
-        for (NamedList<Object> p : list) {
-            System.out.println(p);
-            if (p.get("group") != null) {
-            	Object o = p.get("group");
-            	if (o instanceof List<?>) {
-            	    collectHLL(p, (List<NamedList<Object>>)o, params);
-            	} else if (o != null) {
-	                NamedList<Object> v = (NamedList<Object>)o;
-	                for (Entry<String, Object> entry : v) {
+        for (NamedList<Object> item : list) {
+            if (item.get("group") != null) {
+            	Object group_object = item.get("group");
+            	if (group_object instanceof List<?>) {
+            	    HyperLogLogUnion child = collectHLL(item, (List<NamedList<Object>>)group_object, params);
+            	    union.add(child);
+            	} else if (group_object != null) {
+	                NamedList<Object> group_node = (NamedList<Object>)group_object;
+	                HyperLogLogUnion groupUnion = new HyperLogLogUnion(group_node);
+	                for (Entry<String, Object> entry : group_node) {
 						if (entry.getValue() instanceof List<?>) {
-							collectHLL(p, (List<NamedList<Object>>)entry.getValue(), params);
+							HyperLogLogUnion child = collectHLL(item, (List<NamedList<Object>>)entry.getValue(), params);
+							groupUnion.add(child);
+						} else if (entry.getValue() instanceof NamedList<?>) {
+							NamedList<Object> group_child_node = (NamedList<Object>)entry.getValue();
+							if (null != group_child_node.get("hll")) {
+								HyperLogLogUnion child = new HyperLogLogUnion(group_child_node);
+								child.root = (ICardinality)group_child_node.get("hll");
+								groupUnion.add(child);
+							}
 						}
 					}
-	                if (v.get("hll") != null) {
-	                	v.add("xyz", p.get("value").toString());
+	                if (groupUnion.root != null) {
+	                	union.add(groupUnion);
+	                } else {
+		                if (group_node.get("hll") != null) {
+		                	HyperLogLogUnion child = new HyperLogLogUnion(group_node);
+		                	child.root = (ICardinality)group_node.get("hll");
+		                	union.add(child);
+		                }
 	                }
             	}
             }
         }
         
         return union;
-        
-        /*
-        if (params.getBool(Params.PIVOT, false)) {
-	        final HashMap<String, HyperLogLogUnion> pivot = new HashMap<String, HyperLogLogUnion>();
-	        iterateHLL(collectHLL, new HyperLogLogCollector() {
-				public void collect(NamedList<Object> item, HyperLogLog hll) throws CardinalityMergeException {
-					String key = item.get("ancestor").toString();
-					String facet = item.get("xyz").toString();
-					if (false == pivot.containsKey(key)) {
-						pivot.put(key, new HyperLogLogUnion());
-					}
-					HyperLogLogUnion union = pivot.get(key);
-					union.root = union.root != null ? (HyperLogLog)union.root.merge(hll) : hll;
-					union.node = nodesBYName.get(key);
-					if (item.get("join") != null) {
-						NamedList<Object> node = (NamedList<Object>)item.get("join");
-						if (node.get(key) != null) {
-							NamedList<Object> x = (NamedList<Object>)node.get(key);
-							Object hllObj = x.get("hll");
-							if (hllObj != null) {
-								union.children.put(facet, (HyperLogLog)hllObj);
-								union.child_nodes.put(key, x);
-							}
-						}
-					}
-					if (item.get("hll") != null) {
-						union.children.put(facet, (HyperLogLog)item.get("hll"));
-					}
-					union.child_nodes.put(facet, item);
-				}
-			});
-	        // we now have distincts at each level, time to cross-multiply them
-	        for (String key_a : pivot.keySet()) {
-	        	HyperLogLogUnion setA = pivot.get(key_a);
-	        	long count_of_a = setA.root.cardinality();
-	        	NamedList<Object> sets = new NamedList<Object>();
-				// now we have top most parent which contains group[] array
-				// we get root intersect/merge
-				for (String key_b : pivot.keySet()) {
-					if (key_a == key_b) {
-						continue;
-					}
-					HyperLogLogUnion setB = pivot.get(key_b);
-					long count_of_b = setB.root.cardinality();
-					long union_a_b = setA.root.merge(setB.root).cardinality();
-					long intersection_a_b = (count_of_a + count_of_b) - union_a_b;
-					NamedList<Object> set = new NamedList<Object>();
-					set.add("intersect", intersection_a_b);
-					set.add("union", union_a_b);
-					set.add("total", count_of_a + count_of_b);
-					sets.add(key_b, set);
-					
-					Set<String> covered = Sets.newHashSet();
-					for (String entry : setA.children.keySet()) {
-						HyperLogLog set_a_child = setA.children.get(entry);
-						long count_of_a_child = set_a_child.cardinality();
-						NamedList<Object> child_sets = new NamedList<Object>();
-						
-						if (setA.child_nodes.get(entry).get("pivot") != null) {
-							child_sets = ((NamedList<Object>)setA.child_nodes.get(entry).get("pivot"));
-						} else {
-							setA.child_nodes.get(entry).add("pivot", child_sets);
-						}
-						
-						if (setB.children.containsKey(entry)) {
-							HyperLogLog set_b_child = setB.children.get(entry);
-							long count_of_b_child = set_b_child.cardinality();
-							long union_of_a_child_b_child = set_a_child.merge(set_b_child).cardinality();
-							long intersection_of_a_child_b_child = (count_of_a_child + count_of_b_child) - union_of_a_child_b_child;
-
-							NamedList<Object> child_set = new NamedList<Object>();
-							child_set.add("intersect", intersection_of_a_child_b_child);
-							child_set.add("union", union_of_a_child_b_child);
-							child_set.add("total", count_of_a_child + count_of_b_child);
-							child_sets.add(key_b, child_set);
-						}
-						covered.add(entry);
-					}
-					for (String entry : setB.children.keySet()) {
-						if (covered.contains(entry)) continue;
-						// setA does not contain what is in setB, so we can safely zero it all out
-						System.out.println("zero out " + entry);
-					}
-				}
-				setA.node.add("pivot", sets);
-			}
-        }
-        
-        HashMap<NamedList<Object>, SimpleOrderedMap<Object>> sets = new HashMap<NamedList<Object>, SimpleOrderedMap<Object>>();
-        
-        // now with matrix if it has anything build intersections
-        for (NamedList<Object> a : matrix.keySet()) {
-        	SimpleOrderedMap<Object> wrap = new SimpleOrderedMap<Object>();
-            for (NamedList<Object> b : matrix.keySet()) {
-                if (a == b) continue;
-                HyperLogLog hll_A = matrix.get(a);
-                HyperLogLog hll_B = matrix.get(b);
-                if (hll_A == null || hll_B == null) {
-                	continue;
-                }
-                
-                // are there zeros on either side if so we can just assume empty hll and move on
-                if ((Integer)a.get("total") <= 0 || (Integer)b.get("total") <= 0) {
-	                NamedList<Object> set = new NamedList<Object>();
-	                set.add("intersect", 0);
-	                set.add("union", (Integer)a.get("total") + (Integer)b.get("total"));
-	                set.add("total", (Integer)a.get("total") + (Integer)b.get("total"));
-	                wrap.add(b.get("xyz").toString(), set);
-                } else {
-	                HyperLogLog union = (HyperLogLog)hll_A.merge(hll_B);
-	                long union_count = union.cardinality();
-	                long total_count = matrix.get(a).cardinality() + matrix.get(b).cardinality();
-	                long inclusion_exclusion_principle_instersect = total_count - union_count;
-	                NamedList<Object> set = new NamedList<Object>();
-	                set.add("intersect", inclusion_exclusion_principle_instersect);
-	                set.add("union", union_count);
-	                set.add("total", total_count);
-	                set.add("hll", union);
-	                wrap.add(b.get("xyz").toString(), set);
-                }
-            }
-            sets.put(a, wrap);
-        }
-        
-        List<NamedList<Object>> yield = new ArrayList<NamedList<Object>>();
-        for (NamedList<Object> item : sets.keySet()) {
-        	item.add("join", sets.get(item));
-        	if (parent != null) {
-        		item.add("ancestor", parent.get("value").toString());
-        	}
-        	yield.add(item);
-		}
-        return yield;
-        */
     }
 
     @SuppressWarnings("unchecked")
     private List<NamedList<Object>> collectChildren(DocSet contrained_set_of_documents, IndexSchema schema, String parentField, LinkedList<String> queue, SolrQueryRequest req, DocSet docs, SolrParams params, NamedList<Integer> parents, LinkedList<String> priorQueries, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
         List<NamedList<Object>> results = new ArrayList<NamedList<Object>>(parents.size());
-        int HLL_SKETCH_SIZE = params.getInt(Params.SKETCH_SIZE, 12);
+        int ESTIMATE_SIZE = params.getInt(Params.ESTIMATE_SIZE, 1000);
+        double ESTIMATE_PCT = params.getDouble(Params.ESTIMATE_PCT, 0.05);
 
         String nextField = queue.pollFirst();
         SolrIndexSearcher indexSearcher = req.getSearcher();
@@ -680,27 +536,41 @@ public class GroupByComponent extends SearchComponent {
 
                 if (children.size() >= 0) {
                     LinkedList<String> clone = new LinkedList<String>(priorQueries);
+                    String facet = "";
                     if (hasBlockJoinHint(parentField)) {
-                        clone.add(parentField.split(BLOCK_JOIN_PATH_HINT)[0] + "/" + parentField.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0] + ":" + parent.getKey());
+                    	facet = parentField.split(BLOCK_JOIN_PATH_HINT)[0] + "/" + parentField.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0] + ":" + parent.getKey();
+                        clone.add(facet);
                     } else {
                     	// are we a range query?
                     	if (parent.getKey().matches("^.*:\\[.*\\sTO\\s.*\\]$")) {
-                    		clone.add(parent.getKey());
+                    		facet = parent.getKey();
+                    		clone.add(facet);
                     	} else {
-                    		clone.add(parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey());
+                    		facet = parentField.split(":")[0] + ":" + parent.getKey() + "/" + parentField.split(":")[0] + ":" + parent.getKey();
+                    		clone.add(facet);
                     	}
                     }
                     
                     // check if we have distinct, and if so, are we last item? if so, then only return unique items
                     if (params.getParams(Params.DISTINCT) != null && queue.size() <= 0) {
                     	// count them up in a rough sketch
-                    	HyperLogLog hll = new HyperLogLog(HLL_SKETCH_SIZE);
+                    	
+                    	CountThenEstimate hll = new CountThenEstimate(ESTIMATE_SIZE, new HyperLogLog.Builder(ESTIMATE_PCT));
                     	Integer count = 0;
                     	for (Map.Entry<String, Integer> child : children) {
                     		hll.offer(child.getKey());
                     		count += child.getValue();
                     	}
                     	NamedList<Object> n = new NamedList<Object>();
+                    	
+                    	List<String> path = new ArrayList<String>();
+                    	for (Entry<String, Integer> entry : parents) {
+                    		path.add(entry.getKey());
+						}
+                    	
+                    	String prior = priorQueries.isEmpty() ? "" : priorQueries.get(priorQueries.size()-1);
+                    	n.add("value", parent.getKey());
+                    	n.add("path", (prior.isEmpty() ? "" : prior.substring(prior.indexOf("/")+1) + "/") + facet.substring(facet.indexOf("/")+1));
                     	n.add("unique", children.size() <= 0 ? 0 : hll.cardinality());
                     	n.add("total", count);
                     	if (params.getBool(Params.INTERSECT, true)) {
@@ -710,9 +580,9 @@ public class GroupByComponent extends SearchComponent {
                         if (hasBlockJoinHint(fieldName)) {
                         	fieldName = fieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
                         }
-                        n.add("field", fieldName);
-                        pivot.add("group", n);
-
+                        NamedList<Object> wrap = new NamedList<Object>();
+                        wrap.add(fieldName, n);
+                        pivot.add("group", wrap);
                     } else {
                     	NamedList<Object> n = new NamedList<Object>();
                     	n.add(nextField, collectChildren(contrained_set_of_documents, schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));                   	
