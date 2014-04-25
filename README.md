@@ -34,23 +34,21 @@ This component implements a custom SearchComponent and can be registered in your
 + Aggregate Filters (already checked in but need some tweaks) (having sum(x) > 10)
 + Optimize/Performance - we could reduce memory overhead by iterating distincts using pagination (grab 1000 facets at a time, and store into HyperLogLog rather than load all of them at once using SimpleFacets).
 
-# What it can do #
+### What can it do? ###
 
-That being said it can provide some fairly nice pivot trees with percentiles, sum, and averages. It also has features to allow for facet/pivot on Block Join documents.
+In short pivot and groupby semantics for SOLR such that we can get aggregates, distincts, aproximate quantiles, etc useful for analytic functions. Integrates work done / concepts in open JIRA tickets:
 
-## Examples ##
+> Percentiles for facets, pivot facets, and distributed pivot facets:<br/>
+[https://issues.apache.org/jira/browse/SOLR-3583](https://issues.apache.org/jira/browse/SOLR-3583)
 
-The example provided assumes indexing of Solr Block Join documents representing consumer profiles. See the example docs for illustration. The test data represents a Hierarchical object:
+> Get distinct count of names for a facet field:<br/>
+[https://issues.apache.org/jira/browse/SOLR-2242](https://issues.apache.org/jira/browse/SOLR-2242)
 
-+ Shopper
-+ Order(s)
-+ Transactions(s)
+### Tests ###
 
-Simple model, rather standard in e-commerce.  When indexing the JSON documents the new `SolrInputDocument.addChild(...)` call is used. Also a marker is put on each document in the form of a key=pair, "noun=object". Each document will then have a 'noun' field mapping to what type of document it is in the nested structure. Shopper = `noun:shopper`, Order = `noun:order`, Transaction = `noun:xact`. This is important for block-join hints as we will show.
+This project contains a very large number of tests using both block-join syntax and regular syntax. Code coverage is fairly high, but as with everything, nothing is perfect. I am in process of creating tests based more on user stories listed in this document. You can find them in *.stories package.
 
-## Query ##
-
-## Groups ##
+## Group By ##
 
 Basically the same thing as pivot, but with a twist, in that we support `distinct` and `union`/`intersection` logic. If just doing "groupby" with no additional arguments than we get exactly the same result as pivot (save the name is now 'group'), and functions the same. In the future the difference will be that group will support distributed queries with an option to specify accuracy (hyperloglog/countminsketch/etc).
 
