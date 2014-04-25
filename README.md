@@ -57,17 +57,11 @@ Basically the same thing as pivot, but with a twist, in that we support `distinc
 
 #### Data Set
 
-| asd | asd |   |   |   |
-|-----|-----|---|---|---|
-|     |     |   |   |   |
-|     |     |   |   |   |
-| asd |     |   |   |   |
-
-id | city | user_id
--- | -- | --
-1  | TAMPA | 99999
-2  | ORLANDO | 99999
-3  | ORLANDO | 11111
+| id | state   | city    | user_id | spend |
+|----|---------|---------|---------|-------|
+| 1  | FLORIDA | TAMPA   | 99999   | 1.50  |
+| 2  | FLORIDA | ORLANDO | 11111   | 8.0   |
+| 3  | FLORIDA | ORLANDO | 99999   | 1.50  |
 
 Given each city, get a breakdown of all users in that city, returning only the distinct meta-data (total, distinct).
 
@@ -126,14 +120,14 @@ Yields:
 Note: You get the intersection of TAMPA & ORLANDO as well as union and total. So we can see that TAMPA shares one user with ORLANDO.
 
 ### Aggregate Total Purchase Amount
-
+ 
 #### Data Set
 
-id | state | city | user_id | spend
--- | -- | -- | -- | --
-1  | FLORIDA | TAMPA | 99999 | 1.50
-2  | FLORIDA | ORLANDO | 99999 | 8.00
-3  | FLORIDA | ORLANDO | 11111 | 1.50
+| id | state   | city    | user_id | spend |
+|----|---------|---------|---------|-------|
+| 1  | FLORIDA | TAMPA   | 99999   | 1.50  |
+| 2  | FLORIDA | ORLANDO | 11111   | 8.0   |
+| 3  | FLORIDA | ORLANDO | 99999   | 1.50  |
 
 Regular syntax - just give the field and the stats you want.
 
