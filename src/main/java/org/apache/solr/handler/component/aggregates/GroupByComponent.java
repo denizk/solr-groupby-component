@@ -163,7 +163,7 @@ public class GroupByComponent extends SearchComponent {
     @Override
     public void prepare(ResponseBuilder rb) throws IOException {
         if (rb.req.getParams().get(Params.GROUPBY, "").isEmpty() == false) {
-        	if (rb.req.getParams().getBool(Params.FILTER, false)) {
+        	if (rb.req.getParams().getBool(Params.FILTER, true)) {
         		rb.setNeedDocSet( true );
         	}
             if (log.isDebugEnabled()) {
@@ -179,7 +179,7 @@ public class GroupByComponent extends SearchComponent {
         }
 
         SolrQueryRequest req = rb.req;
-        DocSet contrained_set_of_documents = rb.req.getParams().getBool(Params.FILTER, false) ? rb.getResults().docSet : null;
+        DocSet contrained_set_of_documents = rb.req.getParams().getBool(Params.FILTER, true) ? rb.getResults().docSet : null;
 
         // grab parameters for aggregating against always set facet
         // to max values to allow for distributed queries and for

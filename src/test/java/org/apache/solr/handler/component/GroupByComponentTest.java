@@ -461,7 +461,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
     @Test
     public void testPercentiles() throws Exception {
         ModifiableSolrParams p = new ModifiableSolrParams();
-        p.set("q", "order_date:A*");
+        p.set("q", "*:*");
         p.set("wt", "xml");
         p.set("rows", "0");
         p.set("indent", "true");
