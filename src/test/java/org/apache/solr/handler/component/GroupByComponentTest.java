@@ -81,7 +81,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         parser.parse(new InputSource(new StringReader(response)));
         Document document = parser.getDocument();
         XPath xpath = XPathFactory.newInstance().newXPath();
-        NodeList nodes = (NodeList) xpath.compile("//arr[@name='group']//arr[@name='_root_']//lst//int").evaluate(document, XPathConstants.NODESET);
+        NodeList nodes = (NodeList) xpath.compile("//lst[@name='group']//arr[@name='_root_']//lst//int").evaluate(document, XPathConstants.NODESET);
         assertEquals(2, nodes.getLength());
         assertEquals("6", nodes.item(0).getTextContent());
         assertEquals("5", nodes.item(1).getTextContent());
@@ -109,7 +109,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='noun:shopper/_root_']//lst//int");
+        NodeList nodes = xpath(xml, "//lst[@name='group']//arr[@name='noun:shopper/_root_']//lst//int");
         assertEquals(2, nodes.getLength());
         assertEquals("1", nodes.item(0).getTextContent());
         assertEquals("1", nodes.item(1).getTextContent());
@@ -133,7 +133,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='noun:shopper/_root_']//lst//int");
+        NodeList nodes = xpath(xml, "//lst[@name='group']//arr[@name='noun:shopper/_root_']//lst//int");
         assertEquals(2, nodes.getLength());
         assertEquals("1", nodes.item(0).getTextContent());
         assertEquals("1", nodes.item(1).getTextContent());
@@ -161,7 +161,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='_root_']//lst//int");
+        NodeList nodes = xpath(xml, "//lst[@name='group']//arr[@name='_root_']//lst//int");
         assertEquals(2, nodes.getLength());
 
         nodes = xpath(xml, "//str[text()='11111111']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
@@ -189,7 +189,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
 
-        NodeList nodes = xpath(xml, "//arr[@name='group']//arr[@name='noun:order/order_city_name']//lst//int");
+        NodeList nodes = xpath(xml, "//lst[@name='group']//arr[@name='noun:order/order_city_name']//lst//int");
         assertEquals(2, nodes.getLength());
 
         nodes = xpath(xml, "//str[text()='TAMPA']/../lst[@name='stats']/lst[@name='product_purchase_amount']/double[@name='sum']");
@@ -434,7 +434,7 @@ public class GroupByComponentTest extends SolrTestCaseJ4 {
         System.out.println(xml);
 
         // verify we only pull back the constrained queries
-        NodeList nodes = xpath(xml, "//arr[@name='group']/lst/arr");
+        NodeList nodes = xpath(xml, "/response/lst[@name='group']/arr/lst");
         assertEquals(1, nodes.getLength());
         nodes = xpath(xml, "//str[text()='FLORIDA']");
         assertEquals(1, nodes.getLength());

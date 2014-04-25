@@ -207,12 +207,12 @@ public class GroupByComponent extends SearchComponent {
 
         NamedList<Object> debug = new SimpleOrderedMap<Object>();
 
-        List<NamedList<Object>> pivot = new ArrayList<NamedList<Object>>();
+        NamedList<Object> pivot = new NamedList<Object>();
         for (String groupByArg : groupByArgs) {
             String[] groupByFields = groupByArg.split(",");
             LinkedList<String> queue = new LinkedList<String>();
             queue.addAll(Lists.newArrayList(groupByFields));
-            pivot.add(collect(contrained_set_of_documents, queue, req, params, predicates));
+            collect(pivot, contrained_set_of_documents, queue, req, params, predicates);
         }
         rb.rsp.add("group", pivot);
 
@@ -221,7 +221,7 @@ public class GroupByComponent extends SearchComponent {
         }
     }
 
-    private SimpleOrderedMap<Object> collect(DocSet contrained_set_of_documents, LinkedList<String> queue, SolrQueryRequest req, SolrParams params, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
+    private void collect(NamedList<Object> pivot, DocSet contrained_set_of_documents, LinkedList<String> queue, SolrQueryRequest req, SolrParams params, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
 
         String field = queue.removeFirst();
 
@@ -263,15 +263,11 @@ public class GroupByComponent extends SearchComponent {
             facets = doFacets(field, docs, req, params);
         }
 
-        SimpleOrderedMap<Object> results = new SimpleOrderedMap<Object>();
-
-        results.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
+        pivot.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
         
         if (params.getBool(Params.DISTINCT, false) && params.getBool(Params.INTERSECT, true)) {
-            intersect(results, params);
+            intersect(pivot, params);
         }
-
-        return results;
     }
 
     
@@ -339,7 +335,7 @@ public class GroupByComponent extends SearchComponent {
     }
     
     @SuppressWarnings("unchecked")
-	private void intersect(final SimpleOrderedMap<Object> results, SolrParams params) {
+	private void intersect(final NamedList<Object> results, SolrParams params) {
         try {
             for (Entry<String, Object> entry : results) {
                 if (entry.getValue() instanceof List<?>) {
