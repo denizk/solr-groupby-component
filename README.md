@@ -18,7 +18,14 @@ This component implements a custom SearchComponent and can be registered in your
 
 # Disclaimer #
 
-The component is pretty basic, and needs some level of re-factoring as it doesn't provide the full range of possible slicing and dicing SOLR can do with regular 'fq' and 'q' queries.
+> This component is released under apache licenese. Use at your own discretion, this author takes no liability for anything, at all, ever and makes no guarantees about the software provided.
+
+# Latest #
+
++ Updated API to support date range group bys (useful for time-window based group bys, for example sliding window analysis, etc)
++ Updated API to support regular lucene fields
++ Updated API to support CountThenSketch(...) with provided EPS rates
++ Updated API to support intersection/union cross-joins - such that when you group by attributes you get a "pivot-like" breakdown of all permutations. Useful for things like click -> conversion analysis.
 
 # Next Releases #
 
@@ -42,19 +49,141 @@ Simple model, rather standard in e-commerce.  When indexing the JSON documents t
 
 ## Query ##
 
+## Groups ##
+
+Basically the same thing as pivot, but with a twist, in that we support `distinct` and `union`/`intersection` logic. If just doing "groupby" with no additional arguments than we get exactly the same result as pivot (save the name is now 'group'), and functions the same. In the future the difference will be that group will support distributed queries with an option to specify accuracy (hyperloglog/countminsketch/etc).
+
+### Distinct users by city
+
+#### Data Set
+
+id | city | user_id
+-- | -- | --
+1  | TAMPA | 99999
+2  | ORLANDO | 99999
+3  | ORLANDO | 11111
+
+Given each city, get a breakdown of all users in that city, returning only the distinct meta-data (total, distinct).
+
+	?q=*:*&groupby=city,user_id
+          &groupby.distinct=true
+
+Yields:
+
+	{
+	  "group":[
+	    {
+	      "city":[
+	        {
+	          "value":"ORLANDO",
+	          "count":2,
+	          "group":{
+	            "user_id":{
+	              "value":"ORLANDO",
+	              "path":"city:ORLANDO",
+	              "unique":2,
+	              "total":2,
+	              "join":{
+	                "TAMPA":{
+	                  "intersect":1,
+	                  "union":2,
+	                  "total":3
+	                }
+	              }
+	            }
+	          }
+	        },
+	        {
+	          "value":"TAMPA",
+	          "count":1,
+	          "group":{
+	            "user_id":{
+	              "value":"TAMPA",
+	              "path":"city:TAMPA",
+	              "unique":1,
+	              "total":1,
+	              "join":{
+	                "ORLANDO":{
+	                  "intersect":1,
+	                  "union":2,
+	                  "total":3
+	                }
+	              }
+	            }
+	          }
+	        }
+	      ]
+	    }
+	  ]
+	}
+
+Note: You get the intersection of TAMPA & ORLANDO as well as union and total. So we can see that TAMPA shares one user with ORLANDO.
+
 ### Aggregate Total Purchase Amount
 
-    ?q=*:*&groupby=noun:shopper/noun \
+#### Data Set
+
+id | state | city | user_id | spend
+-- | -- | -- | -- | --
+1  | FLORIDA | TAMPA | 99999 | 1.50
+2  | FLORIDA | ORLANDO | 99999 | 8.00
+3  | FLORIDA | ORLANDO | 11111 | 1.50
+
+Regular syntax - just give the field and the stats you want.
+
+	?q=*:*&groupby=type
+          &groupby.stats=amount
+
+Results in...
+
+	{
+	  "group": [
+	    {
+	      "city": [
+	        {
+	          "value": "ORLANDO",
+	          "count": 2,
+	          "stats": {
+	            "spend": {
+	              "sum": 9.5,
+	              "count": 2
+	            }
+	          }
+	        },
+	        {
+	          "value": "TAMPA",
+	          "count": 1,
+	          "stats": {
+	            "spend": {
+	              "sum": 1.5,
+	              "count": 1
+	            }
+	          }
+	        }
+	      ]
+	    }
+	  ]
+	}
+
+
+Block join syntax version. This will yield a response which has the total spend of everyone that has been indexed.
+
+    ?q=*:*&groupby=noun:shopper/noun
           &groupby.stats=noun:xact/amount
 
-This will yield a response which has the total spend of everyone that has been indexed.
 
 ### Aggregate Total Purchase Amount by City
+
+Regular syntax 
+
+    ?q=*:*&groupby=city
+          &groupby.stats=amount
+
+This will return all unique cities with each city having the total amount of spend in that city.
 
     ?q=*:*&groupby=noun:order/city \
           &groupby.stats=noun:xact/amount
 
-This will return all unique cities with each city having the total amount of spend in that city.
 
 ### Pivot/Aggregate Total Purchase Amount by State,City,Category
 
