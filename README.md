@@ -57,6 +57,12 @@ Basically the same thing as pivot, but with a twist, in that we support `distinc
 
 #### Data Set
 
+| asd | asd |   |   |   |
+|-----|-----|---|---|---|
+|     |     |   |   |   |
+|     |     |   |   |   |
+| asd |     |   |   |   |
+
 id | city | user_id
 -- | -- | --
 1  | TAMPA | 99999
