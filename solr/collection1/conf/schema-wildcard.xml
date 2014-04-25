@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<schema name="example" version="1.1">
+  <types>
+    <fieldType name="string" class="solr.StrField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="boolean" class="solr.BoolField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="integer" class="solr.IntField" omitNorms="true"/>
+    <fieldType name="long" class="solr.LongField" omitNorms="true"/>
+    <fieldType name="float" class="solr.FloatField" omitNorms="true"/>
+    <fieldType name="double" class="solr.DoubleField" omitNorms="true"/>
+    <fieldType name="sint" class="solr.SortableIntField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="slong" class="solr.SortableLongField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="sfloat" class="solr.SortableFloatField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="sdouble" class="solr.SortableDoubleField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="date" class="solr.DateField" sortMissingLast="true" omitNorms="true"/>
+    <fieldType name="random" class="solr.RandomSortField" indexed="true" />
+    
+    <fieldType name="ignored" stored="false" indexed="false" class="solr.StrField" /> 
+
+    <fieldType name="tint" class="solr.TrieIntField"  omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tfloat" class="solr.TrieFloatField"  omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tlong" class="solr.TrieLongField"  omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tdouble" class="solr.TrieDoubleField" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tdouble4" class="solr.TrieDoubleField" precisionStep="4" omitNorms="true" positionIncrementGap="0"/>
+    <fieldType name="tdate" class="solr.TrieDateField" omitNorms="true" positionIncrementGap="0"/>
+ </types>
+
+
+ <fields>
+   <field name="id" type="string" indexed="true" stored="true" required="false" />
+   <field name="_root_" type="string" indexed="true" stored="true" required="false" />
+   <field name="_version_" type="long" indexed="true" stored="true" multiValued="false" />
+   
+   <field name="spend" type="float" indexed="true" stored="true" multiValued="false" />
+   <field name="dt" type="tdate" indexed="true" stored="true" multiValued="false" />
+
+   <dynamicField name="*_date"  type="tdate"  indexed="true"  stored="false" multiValued="false"/>
+   <dynamicField name="*_amount"  type="float"  indexed="true"  stored="false" multiValued="false"/>
+   <dynamicField name="*_total"  type="float"  indexed="true"  stored="false" multiValued="false"/>
+   <dynamicField name="*_quantity"  type="integer"  indexed="true"  stored="false" multiValued="false"/>
+   
+   <dynamicField name="*"  type="string"  indexed="true"  stored="true" multiValued="false"/>
+   
+ </fields>
+
+ <uniqueKey>id</uniqueKey>
+ 
+ <defaultSearchField>id</defaultSearchField>
+
+</schema>

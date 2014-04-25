@@ -5,11 +5,11 @@ import org.junit.rules.TestRule;
 import org.junit.runner.Description;
 import org.junit.runners.model.Statement;
 
-class TimeZoneTestRule implements TestRule {
+public class TimeZoneTestRule implements TestRule {
 
 	private final DateTimeZone zone;
 
-	TimeZoneTestRule(DateTimeZone zone) {
+	public TimeZoneTestRule(DateTimeZone zone) {
 		this.zone = zone;
 	}
 

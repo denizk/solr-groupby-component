@@ -55,7 +55,9 @@ Basically the same thing as pivot, but with a twist, in that we support `distinc
 
 ### Distinct users by city
 
-#### Data Set
+Given each city, get a breakdown of all users in that city, returning only the distinct meta-data (total, distinct).
+
+##### Data Set
 
 | id | state   | city    | user_id | spend |
 |----|---------|---------|---------|-------|
@@ -63,12 +65,12 @@ Basically the same thing as pivot, but with a twist, in that we support `distinc
 | 2  | FLORIDA | ORLANDO | 11111   | 8.0   |
 | 3  | FLORIDA | ORLANDO | 99999   | 1.50  |
 
-Given each city, get a breakdown of all users in that city, returning only the distinct meta-data (total, distinct).
+##### Query
 
 	?q=*:*&groupby=city,user_id
           &groupby.distinct=true
 
-Yields:
+##### Results
 
 	{
 	  "group":[
@@ -119,9 +121,11 @@ Yields:
 
 Note: You get the intersection of TAMPA & ORLANDO as well as union and total. So we can see that TAMPA shares one user with ORLANDO.
 
-### Aggregate Total Purchase Amount
- 
-#### Data Set
+### Aggregate Total Purchase Amount by City
+
+Example shows aggregating at a single level, in this case city, to get the total spend in various cities.
+
+##### Data Set
 
 | id | state   | city    | user_id | spend |
 |----|---------|---------|---------|-------|
@@ -129,12 +133,12 @@ Note: You get the intersection of TAMPA & ORLANDO as well as union and total. So
 | 2  | FLORIDA | ORLANDO | 11111   | 8.0   |
 | 3  | FLORIDA | ORLANDO | 99999   | 1.50  |
 
-Regular syntax - just give the field and the stats you want.
+##### Query
 
 	?q=*:*&groupby=type
           &groupby.stats=amount
 
-Results in...
+##### Results
 
 	{
 	  "group": [
@@ -172,37 +176,249 @@ Block join syntax version. This will yield a response which has the total spend 
           &groupby.stats=noun:xact/amount
 
 
-### Aggregate Total Purchase Amount by City
+### Aggregate Total Purchase Amount by State and City
 
-Regular syntax 
+Example shows multi-dimensional aggregates, this time including state and city in the group by to get the rollups (note: the data itself is flat and can be aggregated in many ways)
+
+##### Data Set
+
+| id | state   | city    | user_id | spend |
+|----|---------|---------|---------|-------|
+| 1  | FLORIDA | TAMPA   | 99999   | 1.50  |
+| 2  | FLORIDA | ORLANDO | 11111   | 8.0   |
+| 3  | FLORIDA | ORLANDO | 99999   | 1.50  |
+
+##### Query 
 
     ?q=*:*&groupby=city
           &groupby.stats=amount
 
-This will return all unique cities with each city having the total amount of spend in that city.
+##### Results
 
-    ?q=*:*&groupby=noun:order/city \
+	{
+	  "group": [
+	    {
+	      "state": [
+	        {
+	          "value": "FLORIDA",
+	          "count": 3,
+	          "stats": {
+	            "spend": {
+	              "sum": 11,
+	              "count": 3
+	            }
+	          },
+	          "group": {
+	            "city": [
+	              {
+	                "value": "ORLANDO",
+	                "count": 2,
+	                "stats": {
+	                  "spend": {
+	                    "sum": 9.5,
+	                    "count": 2
+	                  }
+	                }
+	              },
+	              {
+	                "value": "TAMPA",
+	                "count": 1,
+	                "stats": {
+	                  "spend": {
+	                    "sum": 1.5,
+	                    "count": 1
+	                  }
+	                }
+	              }
+	            ]
+	          }
+	        }
+	      ]
+	    }
+	  ]
+	}
+
+
+##### Block Join Syntax
+    ?q=*:*&groupby=noun:order/state,noun:order/city \
           &groupby.stats=noun:xact/amount
 
 
-### Pivot/Aggregate Total Purchase Amount by State,City,Category
+### Pivot Spend by State,City,Category
+
+Just like the above example, but this time showing that the nesting is arbitrary including category in the mix to get total spend.
+
+##### Data Set
+
+| id | state   | city    | user_id | spend | category |
+|----|---------|---------|---------|-------|----------|
+| 1  | FLORIDA | TAMPA   | 99999   | 1.50  | CAR      |
+| 2  | FLORIDA | ORLANDO | 11111   | 8.0   | CAR      |
+| 3  | FLORIDA | ORLANDO | 99999   | 1.50  | FOOD     |
+| 4  | FLORIDA | ORLANDO | 88888   | 1.50  | FOOD     |
+
+##### Query
+
+	?q=*:*&groupby=state,city,category
+		  &groupby.stats=spend
+
+
+##### Results
+
+	{
+	  "group": [
+	    {
+	      "state": [
+	        {
+	          "value": "FLORIDA",
+	          "count": 4,
+	          "stats": {
+	            "spend": {
+	              "sum": 12.5,
+	              "count": 4
+	            }
+	          },
+	          "group": {
+	            "city": [
+	              {
+	                "value": "ORLANDO",
+	                "count": 3,
+	                "stats": {
+	                  "spend": {
+	                    "sum": 11,
+	                    "count": 3
+	                  }
+	                },
+	                "group": {
+	                  "category": [
+	                    {
+	                      "value": "FOOD",
+	                      "count": 2,
+	                      "stats": {
+	                        "spend": {
+	                          "sum": 3,
+	                          "count": 2
+	                        }
+	                      }
+	                    },
+	                    {
+	                      "value": "CAR",
+	                      "count": 1,
+	                      "stats": {
+	                        "spend": {
+	                          "sum": 8,
+	                          "count": 1
+	                        }
+	                      }
+	                    }
+	                  ]
+	                }
+	              },
+	              {
+	                "value": "TAMPA",
+	                "count": 1,
+	                "stats": {
+	                  "spend": {
+	                    "sum": 1.5,
+	                    "count": 1
+	                  }
+	                },
+	                "group": {
+	                  "category": [
+	                    {
+	                      "value": "CAR",
+	                      "count": 1,
+	                      "stats": {
+	                        "spend": {
+	                          "sum": 1.5,
+	                          "count": 1
+	                        }
+	                      }
+	                    }
+	                  ]
+	                }
+	              }
+	            ]
+	          }
+	        }
+	      ]
+	    }
+	  ]
+	}
+
+##### Block Join Syntax Example
 
     ?q=*:*&groupby=noun:order/state,noun:order/city,noun:xact/category \
           &groupby.stats=noun:xact/amount
 
-This will return all distinct states, with pivot into each city within that state, and each category of item purchased in that city with aggregate statistics for each level.
+### Spend Percentile Breakdowns
 
-### Aggregate with Percentiles
+Allow a user to specify the percentile breakdown to get the 25%,50%,75%, or custom percentile breakdown. Breakdowns are provided by [StreamLib - QDigest](https://github.com/addthis/stream-lib/blob/master/src/main/java/com/clearspring/analytics/stream/quantile/QDigest.java).
+
+> Quantiles are points taken at regular intervals from the cumulative distribution function (CDF) of a random variable. Useful for answering questions like what is the total spend # that represents the 90th percentile of all spend within a populous. Practical applications including ranking/distribution/bucketing (heavy, medium, light, etc).
+
+##### Data Set
+
+| id | state   | city    | user_id | spend | category |
+|----|---------|---------|---------|-------|----------|
+| 1  | FLORIDA | TAMPA   | 99999   | 1.50  | CAR      |
+| 2  | FLORIDA | ORLANDO | 11111   | 8.0   | CAR      |
+| 3  | FLORIDA | ORLANDO | 99999   | 1.50  | FOOD     |
+| 4  | FLORIDA | ORLANDO | 88888   | 1.50  | FOOD     |
+
+##### Query
+
+	?q=*:*&groupby=state
+		  &groupby.stats=spend
+		  &groupby.percentiles=25,50,75
+
+##### Result
+
+	{
+	  "group": [
+	    {
+	      "state": [
+	        {
+	          "value": "FLORIDA",
+	          "count": 4,
+	          "stats": {
+	            "spend": {
+	              "sum": 12.5,
+	              "count": 4,
+	              "percentile-25": 4,
+	              "percentile-50": 8,
+	              "percentile-75": 8
+	            }
+	          }
+	        }
+	      ]
+	    }
+	  ]
+	}
+
+> Reading this result, the 25%-tile for spend in the state of florida was ~$4.00, that 50% of the time the spend was $8.00, and that 75% of the time the spend was $8.00. Obviously with larger sets of data this data will stratify more.
+
+##### Block Join Syntax
 
     ?q=*:*&groupby=noun:xact/category \
           &groupby.stats=noun:xact/amount
           &groupby.percentiles=25,50,75
 
-This will return the sum, count, and distribution of average spend for any given category.
 
 ### Returning multiple aggregates
 
-Aggregates can be return at any level and in multiples.
+Aggregates can be return at any level and in multiples so that we can get the overall aggregates for spend, quantity, and other measures in one single shot.
+
+##### Example
+
+	?q=*:*&groupby=category
+		  &groupby.stats=spend
+		  &groupby.stats=quantity
+          &groupby.percentiles=25,50,75
+
+This will yield the category/spend and category/quantity totals with their quantile breakdown in a single call.
+
+##### Block Join Syntax
 
     ?q=*:*&groupby=noun:xact/category \
           &groupby.stats=noun:xact/amount
@@ -211,7 +427,192 @@ Aggregates can be return at any level and in multiples.
 
 In the above contrived example we return the aggregate $ spend and # of purchases in each category along with the percentiles for each.
 
-### Aggregate with Constraint
+### Date Range Group By
+
+Doing comparative analysis of prior week vs. this week is a common analytic function when doing click stream analytics or year/year metric evaluation. We support date range group by using the specified syntax.
+
+##### Data Set
+
+| id | user_id | dt                   | event      |
+|----|---------|----------------------|------------|
+| 1  | 1111    | 2014-01-01T12:32:12Z | click      |
+| 1  | 1111    | 2014-01-01T12:32:13Z | impression |
+| 1  | 1111    | 2014-01-10T15:23:13Z | conversion |
+
+##### Query
+
+	?q=*:*&groupby=dt,user_id
+		  &groupby.distinct=true
+		  &groupby.range.dt.start=NOW/DAY-14DAYS
+		  &groupby.range.dt.end=NOW/DAY
+		  &groupby.range.gap=+7DAYS
+
+##### Result
+
+	{
+	  "group": [
+	    {
+	      "event": [
+	        {
+	          "value": "click",
+	          "count": 1,
+	          "group": {
+	            "dt": [
+	              {
+	                "value": "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]",
+	                "range.start": "2014-01-01T00:00:00Z",
+	                "range.stop": "2014-01-08T00:00:00Z",
+	                "count": 1,
+	                "group": {
+	                  "user_id": {
+	                    "value": "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]",
+	                    "path": "event:click/dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]",
+	                    "unique": 1,
+	                    "total": 1,
+	                    "join": {
+	                      "conversion": {
+	                        "dt:[2014-01-08T00:00:00Z TO 2014-01-15T00:00:00Z]": {
+	                          "intersect": 1,
+	                          "union": 1,
+	                          "total": 2
+	                        }
+	                      },
+	                      "impression": {
+	                        "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]": {
+	                          "intersect": 1,
+	                          "union": 1,
+	                          "total": 2
+	                        }
+	                      }
+	                    }
+	                  }
+	                }
+	              }
+	            ]
+	          },
+	          "join": {
+	            "conversion": {
+	              "intersect": 1,
+	              "union": 1,
+	              "total": 2
+	            },
+	            "impression": {
+	              "intersect": 1,
+	              "union": 1,
+	              "total": 2
+	            }
+	          }
+	        },
+	        {
+	          "value": "conversion",
+	          "count": 1,
+	          "group": {
+	            "dt": [
+	              {
+	                "value": "dt:[2014-01-08T00:00:00Z TO 2014-01-15T00:00:00Z]",
+	                "range.start": "2014-01-08T00:00:00Z",
+	                "range.stop": "2014-01-15T00:00:00Z",
+	                "count": 1,
+	                "group": {
+	                  "user_id": {
+	                    "value": "dt:[2014-01-08T00:00:00Z TO 2014-01-15T00:00:00Z]",
+	                    "path": "event:conversion/dt:[2014-01-08T00:00:00Z TO 2014-01-15T00:00:00Z]",
+	                    "unique": 1,
+	                    "total": 1,
+	                    "join": {
+	                      "click": {
+	                        "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]": {
+	                          "intersect": 1,
+	                          "union": 1,
+	                          "total": 2
+	                        }
+	                      },
+	                      "impression": {
+	                        "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]": {
+	                          "intersect": 1,
+	                          "union": 1,
+	                          "total": 2
+	                        }
+	                      }
+	                    }
+	                  }
+	                }
+	              }
+	            ]
+	          },
+	          "join": {
+	            "click": {
+	              "intersect": 1,
+	              "union": 1,
+	              "total": 2
+	            },
+	            "impression": {
+	              "intersect": 1,
+	              "union": 1,
+	              "total": 2
+	            }
+	          }
+	        },
+	        {
+	          "value": "impression",
+	          "count": 1,
+	          "group": {
+	            "dt": [
+	              {
+	                "value": "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]",
+	                "range.start": "2014-01-01T00:00:00Z",
+	                "range.stop": "2014-01-08T00:00:00Z",
+	                "count": 1,
+	                "group": {
+	                  "user_id": {
+	                    "value": "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]",
+	                    "path": "event:impression/dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]",
+	                    "unique": 1,
+	                    "total": 1,
+	                    "join": {
+	                      "click": {
+	                        "dt:[2014-01-01T00:00:00Z TO 2014-01-08T00:00:00Z]": {
+	                          "intersect": 1,
+	                          "union": 1,
+	                          "total": 2
+	                        }
+	                      },
+	                      "conversion": {
+	                        "dt:[2014-01-08T00:00:00Z TO 2014-01-15T00:00:00Z]": {
+	                          "intersect": 1,
+	                          "union": 1,
+	                          "total": 2
+	                        }
+	                      }
+	                    }
+	                  }
+	                }
+	              }
+	            ]
+	          },
+	          "join": {
+	            "click": {
+	              "intersect": 1,
+	              "union": 1,
+	              "total": 2
+	            },
+	            "conversion": {
+	              "intersect": 1,
+	              "union": 1,
+	              "total": 2
+	            }
+	          }
+	        }
+	      ]
+	    }
+	  ]
+	}
+
+## Block Join Specific Niceness
+
+Do to the nature of block join syntax being rather obtuse the following allows you to use filter queries that read left-to-right for block-joins without the nasty query syntax block joins require.
+
+#### Aggregate with Constraint
 
     ?q=*:*&groupby=noun:order/city:CLINTON \
           &groupby.stats=noun:xact/amount
@@ -228,11 +629,11 @@ Now we will only get back the aggregates for CLINTON in the state of UTAH. Or if
     ?q=*:*&groupby=noun:order/state,noun:order/city:CLINTON \
           &groupby.stats=noun:xact/amount
 
-## Sanity Check - What query syntax is that? ##
+### Sanity Check - What query syntax is that? ##
 
 At this point you are probably wondering what the heck this syntax is. It kinda-looks like XPath, but it has what looks to be XML Namespaces attached to them. Let's break it down.
 
-### Why it was needed
+#### Why it was needed
 
 If you index document using flattened structures, you can ignore the syntax entirely. In-fact, you should probably just use facets and stats components if you are in this camp and stop here.
 
@@ -250,7 +651,7 @@ I don't think ANYONE wants to write queries like that (or even generate them) - 
 
 What we need is something familiar and simple - a little abstraction magic and we should be good.
 
-### How it works
+#### How it works
 
 We'll because the root problem is we are constructing joins and because we **WANT** to query hierarchies we need a slight twist on the language. By all means, this is a `SearchComponent`, it doesn't mess with the existing search parameters - however it also doesn't try to pretend it's the same as normal querying. This is good and bad..
 
@@ -266,7 +667,7 @@ We'll because the root problem is we are constructing joins and because we **WAN
 + It doesn't share any state between queries which means if you facet, your going to have to restate your facet query as a groupby query to get the same result.
 + It is different - and different can be a stumbling block for some.
 
-### Syntax Breakdown
+#### Syntax Breakdown
 
 Group by commands are always prefixed by a Block Join Hint.
 
@@ -287,71 +688,3 @@ If you seen in the examples, sometimes it is nice to constrain the group by, for
 </pre>
 
 This will return the aggregate result of all purchases in the state of florida for RED BULL only.
-
-#### Test Documents ####
-
-    {
-      "id" : 11111111,
-      "orders" : [ 
-    	  {
-    	    "date" : 20130407,
-    	    "address" : {
-    	      "state" : "FLORIDA",
-    	      "city" : "TAMPA",
-    	      "county" : "HILLSBOROUGH",
-    	      "postal_code" : "33634",
-    	      "fips_code" : "12086",
-    	      "market" : "TAMPA/ST. PETERSBURG",
-    	      "region" : "SOUTHEAST",
-    	      "latitude" : 25.808700561523438,
-    	      "longitude" : -80.19509887695312
-    	    },
-    	    "transactions" : [
-    	    	{
-    		    	"quantity" : 1,
-    		      	"amount" : 5.0,
-    		      	"upc" : "12341234",
-    		      	"category" : "ENERGY DRINKS",
-    		      	"subcategory" : "SUPPLIMENTS",
-    		      	"manufacturer" : "RED BULL NORTH AMERICA",
-    		      	"corporation" : "RED BULL",
-    		      	"brand" : "RED BULL",
-    		      	"type" : "ENERGY DRINKS/SHOTS"
-    	    	},
-    	    	{
-    		    	"quantity" : 1,
-    		      	"amount" : 2.0,
-    		      	"upc" : "444444444",
-    		      	"category" : "ENERGY DRINKS",
-    		      	"subcategory" : "SUPPLIMENTS",
-    		      	"manufacturer" : "PEPSI",
-    		      	"corporation" : "PEPSI",
-    		      	"brand" : "MONSTER",
-    		      	"type" : "ENERGY DRINKS/SHOTS"
-    	    	},
-    	    	{
-    		    	"quantity" : 1,
-    		      	"amount" : 2.0,
-    		      	"upc" : "1222222222222",
-    		      	"category" : "PROTEIN SHAKE",
-    		      	"subcategory" : "SUPPLIMENTS",
-    		      	"manufacturer" : "EAS",
-    		      	"corporation" : "EAS",
-    		      	"brand" : "EAS 100% WHEY PROTEIN",
-    		      	"type" : "BODY BUILDER"
-    	    	},
-    	    	{
-    		    	"quantity" : 1,
-    		      	"amount" : 1.0,
-    		      	"upc" : "55555555",
-    		      	"category" : "CANDY",
-    		      	"subcategory" : "CHEWY CANDY",
-    		      	"manufacturer" : "MARS, INC",
-    		      	"corporation" : "MARS, INC",
-    		      	"brand" : "STARBURST",
-    		      	"type" : "CANDY"
-    	    	}
-    	    ]
-    	  }
-      ]
-    }
