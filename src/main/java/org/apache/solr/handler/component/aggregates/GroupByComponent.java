@@ -73,6 +73,18 @@ import com.google.common.collect.Lists;
 
 public class GroupByComponent extends SearchComponent {
 
+    private static final String UNIQUE = "unique";
+
+    private static final String TOTAL = "total";
+
+    private static final String SUM = "sum";
+
+    private static final String COUNT = "count";
+
+    private static final String HLL = "hll";
+
+    private static final String GROUP = "group";
+
     private static final Logger log = LoggerFactory.getLogger(GroupByComponent.class);
 
     public static final String COMPONENT_NAME = "groupby";
@@ -177,8 +189,8 @@ public class GroupByComponent extends SearchComponent {
         if (rb.req.getParams().get(Params.GROUPBY, "").isEmpty()) {
             return;
         }
-
         SolrQueryRequest req = rb.req;
+        
         DocSet contrained_set_of_documents = rb.req.getParams().getBool(Params.FILTER, true) ? rb.getResults().docSet : null;
 
         // grab parameters for aggregating against always set facet
@@ -190,7 +202,6 @@ public class GroupByComponent extends SearchComponent {
         params.set("facet.limit", req.getParams().getInt(Params.LIMIT, Integer.MAX_VALUE));
         params.set("facet.missing", false);
         params.set("facet.mincount", req.getParams().getInt(Params.MINCOUNT, 1));
-        params.set("cache", "false");
 
         // the group by parameters passed in by the user
         // &groupby=product_brand_name&groupby=product_category_name
@@ -205,8 +216,6 @@ public class GroupByComponent extends SearchComponent {
             }
         }
 
-        NamedList<Object> debug = new SimpleOrderedMap<Object>();
-
         NamedList<Object> pivot = new NamedList<Object>();
         for (String groupByArg : groupByArgs) {
             String[] groupByFields = groupByArg.split(",");
@@ -214,11 +223,7 @@ public class GroupByComponent extends SearchComponent {
             queue.addAll(Lists.newArrayList(groupByFields));
             collect(pivot, contrained_set_of_documents, queue, req, params, predicates);
         }
-        rb.rsp.add("group", pivot);
-
-        if (req.getParams().getBool(Params.DEBUG, false)) {
-            rb.rsp.add("groups.debug", debug);
-        }
+        rb.rsp.add(GROUP, pivot);
     }
 
     private void collect(NamedList<Object> pivot, DocSet contrained_set_of_documents, LinkedList<String> queue, SolrQueryRequest req, SolrParams params, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
@@ -263,7 +268,9 @@ public class GroupByComponent extends SearchComponent {
             facets = doFacets(field, docs, req, params);
         }
 
-        pivot.add(field, collectChildren(contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates));
+        NamedList<Object> wrap = new NamedList<Object>();
+        collectChildren(wrap, contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates);
+        pivot.add(field, wrap);
         
         if (params.getBool(Params.DISTINCT, false) && params.getBool(Params.INTERSECT, true)) {
             intersect(pivot, params);
@@ -304,7 +311,7 @@ public class GroupByComponent extends SearchComponent {
         		// build up all dates available
         		DateTime current_start_period = start_period;
         		while (current_start_period.isBefore(end_period)) {
-        			
+        		    
         		    DateMathParserFixed p = new DateMathParserFixed();
         		    p.setNow(current_start_period);
         			DateTime start_date = current_start_period;
@@ -340,8 +347,11 @@ public class GroupByComponent extends SearchComponent {
             for (Entry<String, Object> entry : results) {
                 if (entry.getValue() instanceof List<?>) {
                     HyperLogLogUnion unions = collectHLL(null, (List<NamedList<Object>>)entry.getValue(), params);
+                    unions.collect();                   
+                } else if (entry.getValue() instanceof NamedList<?>) {
+                    List<NamedList<Object>> c = walk((NamedList<Object>)entry.getValue());
+                    HyperLogLogUnion unions = collectHLL(null, c, params);
                     unions.collect();
-                    clean((List<NamedList<Object>>)entry.getValue());
                 }
             }
         } catch (CardinalityMergeException e) {
@@ -352,78 +362,35 @@ public class GroupByComponent extends SearchComponent {
     }
     
     @SuppressWarnings("unchecked")
-	private void clean(final List<NamedList<Object>> list) {
-    	for (NamedList<Object> p : list) {
-    		if (p.get("group") != null) {
-    			Object o = p.get("group");
-    			if (o instanceof List<?>) {
-    				clean((List<NamedList<Object>>)o);
-            	} else if (o != null) {
-            		NamedList<Object> v = (NamedList<Object>)o;
-	                for (Entry<String, Object> entry : v) {
-						if (entry.getValue() instanceof List<?>) {
-							clean((List<NamedList<Object>>)entry.getValue());
-						} else if (entry.getValue() instanceof NamedList<?>) {
-							NamedList<Object> x = (NamedList<Object>)entry.getValue();
-							x.remove("hll");
-						}
-					}
-					v.remove("hll");
-					if (v.get("join") != null) {
-						NamedList<Object> join = (NamedList<Object>)v.get("join");
-						if (join.iterator().hasNext()) {
-							NamedList<Object> details = ((NamedList<Object>)join.getVal(0));
-							details.remove("hll");
-						}
-					}
-            	}
-    		}
-			p.remove("hll");
-			if (p.get("join") != null) {
-				NamedList<Object> join = (NamedList<Object>)p.get("join");
-				join.remove("hll");
-			}
-    	}
+    private List<NamedList<Object>> walk(NamedList<Object> x) {
+        ArrayList<NamedList<Object>> results = new ArrayList<NamedList<Object>>();
+        for (Entry<String, Object> entry : x) {
+            if (entry.getValue() instanceof NamedList<?>) {
+                NamedList<Object> child = (NamedList<Object>)entry.getValue();
+                results.add(child);
+            }
+        }
+        return results;
     }
     
     // walk tree and collect all HLL matrix to create intersection (possible to do intersects at every level) which
     // could be great... pivot {A,B,C} => intersects at C level, B level, and A level
-    @SuppressWarnings("unchecked")
 	private HyperLogLogUnion collectHLL(NamedList<Object> parent, final List<NamedList<Object>> list, final SolrParams params) throws CardinalityMergeException, IOException {
         HyperLogLogUnion union = new HyperLogLogUnion(parent);
 
         for (NamedList<Object> item : list) {
-            if (item.get("group") != null) {
-            	Object group_object = item.get("group");
-            	if (group_object instanceof List<?>) {
-            	    HyperLogLogUnion child = collectHLL(item, (List<NamedList<Object>>)group_object, params);
-            	    union.add(child);
-            	} else if (group_object != null) {
-	                NamedList<Object> group_node = (NamedList<Object>)group_object;
-	                HyperLogLogUnion groupUnion = new HyperLogLogUnion(group_node);
-	                for (Entry<String, Object> entry : group_node) {
-						if (entry.getValue() instanceof List<?>) {
-							HyperLogLogUnion child = collectHLL(item, (List<NamedList<Object>>)entry.getValue(), params);
-							groupUnion.add(child);
-						} else if (entry.getValue() instanceof NamedList<?>) {
-							NamedList<Object> group_child_node = (NamedList<Object>)entry.getValue();
-							if (null != group_child_node.get("hll")) {
-								HyperLogLogUnion child = new HyperLogLogUnion(group_child_node);
-								child.root = (ICardinality)group_child_node.get("hll");
-								groupUnion.add(child);
-							}
-						}
-					}
-	                if (groupUnion.root != null) {
-	                	union.add(groupUnion);
-	                } else {
-		                if (group_node.get("hll") != null) {
-		                	HyperLogLogUnion child = new HyperLogLogUnion(group_node);
-		                	child.root = (ICardinality)group_node.get("hll");
-		                	union.add(child);
-		                }
-	                }
-            	}
+            if (item instanceof ExtraNamedList) {
+                ICardinality cardinality = ((ExtraNamedList)item).getMeta(HLL, ICardinality.class);
+                if (cardinality != null) {
+                    HyperLogLogUnion child = new HyperLogLogUnion(item);
+                    child.root = cardinality;
+                    union.add(child);
+                }
+            } else {
+                HyperLogLogUnion child = collectHLL(item, walk(item), params);
+                if (child.root != null) {
+                    union.add(child);
+                }
             }
         }
         
@@ -431,8 +398,7 @@ public class GroupByComponent extends SearchComponent {
     }
 
     @SuppressWarnings("unchecked")
-    private List<NamedList<Object>> collectChildren(DocSet contrained_set_of_documents, IndexSchema schema, String parentField, LinkedList<String> queue, SolrQueryRequest req, DocSet docs, SolrParams params, NamedList<Integer> parents, LinkedList<String> priorQueries, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
-        List<NamedList<Object>> results = new ArrayList<NamedList<Object>>(parents.size());
+    private void collectChildren(NamedList<Object> root, DocSet contrained_set_of_documents, IndexSchema schema, String parentField, LinkedList<String> queue, SolrQueryRequest req, DocSet docs, SolrParams params, NamedList<Integer> parents, LinkedList<String> priorQueries, List<Function<AggregationResult, Boolean>> predicates) throws IOException {
         int ESTIMATE_SIZE = params.getInt(Params.ESTIMATE_SIZE, 1000);
         double ESTIMATE_PCT = params.getDouble(Params.ESTIMATE_PCT, 0.05);
 
@@ -446,15 +412,17 @@ public class GroupByComponent extends SearchComponent {
 
             SimpleOrderedMap<Object> pivot = new SimpleOrderedMap<Object>();
             if (parent.getKey().contains(":") && parent.getKey().contains(" TO ")) {
-            	pivot.add("value", parent.getKey());
             	String key = parent.getKey().substring(parent.getKey().indexOf(":")+1).replace("[", "").replace("]", "");
             	String[] ab = key.split(" TO ");
-            	pivot.add("range.start", ab[0]);
-            	pivot.add("range.stop", ab[1]);
+            	// pivot.add("range.start", ab[0]);
+            	pivot.add("stop", ab[1]);
+            	
+            	root.add(ab[0], pivot);
             } else {
-            	pivot.add("value", parent.getKey());
+            	// pivot.add(VALUE, parent.getKey());
+                root.add(parent.getKey(), pivot);
             }
-            pivot.add("count", parent.getValue());
+            pivot.add(COUNT, parent.getValue());
             
             boolean skip = false;
             
@@ -489,8 +457,8 @@ public class GroupByComponent extends SearchComponent {
                     }
                     NamedList<Object> n = new NamedList<Object>();
                     if (percentiles.getSum() != null) {
-                        n.add("sum", percentiles.getSum());
-                        n.add("count", percentiles.getCount());
+                        n.add(SUM, percentiles.getSum());
+                        n.add(COUNT, percentiles.getCount());
                     }
                     if (percentiles.getQdigest() != null && percentiles.getCount() > 0) {
                         for (Integer i : percentiles.getPercentiles()) {
@@ -521,13 +489,13 @@ public class GroupByComponent extends SearchComponent {
                         String[] filter = fieldName.split(":");
                         Query sub = extractQuery(schema, fieldName, null);
                         fieldName = filter[0];
-                        children = doFacets(fieldName, indexSearcher.getDocSet(sub, intersection), req, params); //new SimpleFacets(req, indexSearcher.getDocSet(sub, intersection), params).getTermCounts(fieldName);
+                        children = doFacets(fieldName, indexSearcher.getDocSet(sub, intersection), req, params);
                     } else {
-                        children = doFacets(fieldName, intersection, req, params);// new SimpleFacets(req, intersection, params).getTermCounts(fieldName);
+                        children = doFacets(fieldName, intersection, req, params);
                     }
 
                 } else {
-                    children = doFacets(nextField, intersection, req, params);//new SimpleFacets(req, intersection, params).getTermCounts(nextField);
+                    children = doFacets(nextField, intersection, req, params);
                 }
 
                 if (children.size() >= 0) {
@@ -547,50 +515,43 @@ public class GroupByComponent extends SearchComponent {
                     	}
                     }
                     
+                    String fieldName = nextField;
+                    if (hasBlockJoinHint(fieldName)) {
+                        fieldName = fieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
+                    }
+                    
                     // check if we have distinct, and if so, are we last item? if so, then only return unique items
                     if (params.getParams(Params.DISTINCT) != null && queue.size() <= 0) {
                     	// count them up in a rough sketch
-                    	
                     	CountThenEstimate hll = new CountThenEstimate(ESTIMATE_SIZE, new HyperLogLog.Builder(ESTIMATE_PCT));
                     	Integer count = 0;
                     	for (Map.Entry<String, Integer> child : children) {
                     		hll.offer(child.getKey());
                     		count += child.getValue();
                     	}
-                    	NamedList<Object> n = new NamedList<Object>();
                     	
-                    	List<String> path = new ArrayList<String>();
-                    	for (Entry<String, Integer> entry : parents) {
-                    		path.add(entry.getKey());
-						}
-                    	
-                    	String prior = priorQueries.isEmpty() ? "" : priorQueries.get(priorQueries.size()-1);
-                    	n.add("value", parent.getKey());
-                    	n.add("path", (prior.isEmpty() ? "" : prior.substring(prior.indexOf("/")+1) + "/") + facet.substring(facet.indexOf("/")+1));
-                    	n.add("unique", children.size() <= 0 ? 0 : hll.cardinality());
-                    	n.add("total", count);
+                    	ExtraNamedList node = new ExtraNamedList();
+                    	node.add(UNIQUE, children.size() <= 0 ? 0 : hll.cardinality());
+                    	node.add(TOTAL, count);
                     	if (params.getBool(Params.INTERSECT, true)) {
-                    		n.add("hll", hll);
+                    		node.addMeta(HLL, hll);
+                    		node.addMeta("value", parent.getKey());
+                    		String prior = priorQueries.isEmpty() ? "" : priorQueries.get(priorQueries.size()-1);
+                    		node.addMeta("path", (prior.isEmpty() ? "" : prior.substring(prior.indexOf("/")+1) + "/") + facet.substring(facet.indexOf("/")+1));
+                    		node.addMeta("field", fieldName);
                     	}
-                    	String fieldName = nextField;
-                        if (hasBlockJoinHint(fieldName)) {
-                        	fieldName = fieldName.split(BLOCK_JOIN_PATH_HINT)[1].split(":")[0];
-                        }
+ 
                         NamedList<Object> wrap = new NamedList<Object>();
-                        wrap.add(fieldName, n);
-                        pivot.add("group", wrap);
+                        wrap.add(fieldName, node);
+                        pivot.add(GROUP, wrap);
                     } else {
-                    	NamedList<Object> n = new NamedList<Object>();
-                    	n.add(nextField, collectChildren(contrained_set_of_documents, schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates));                   	
-                    	pivot.add("group", n);
+                        NamedList<Object> wrap = new NamedList<Object>();
+                    	collectChildren(wrap, contrained_set_of_documents, schema, nextField, (LinkedList<String>) queue.clone(), req, intersection, params, children, clone, predicates);                   	
+                    	pivot.add(fieldName, wrap);
                     }
                 }
             }
-
-            results.add(pivot);
         }
-
-        return results;
     }
 
     @Override

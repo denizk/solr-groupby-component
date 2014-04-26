@@ -50,11 +50,11 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='1']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='1']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='media_delivery']//lst[@name='join']/lst[@name='1']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='media_delivery']//lst[@name='join']/lst[@name='1']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
         
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='99']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='99']/lst[@name='media_delivery']/long[@name='union']").longValue(), 1L);       
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='conversion']//lst[@name='join']/lst[@name='99']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='conversion']//lst[@name='join']/lst[@name='99']/lst[@name='media_delivery']/long[@name='union']").longValue(), 1L);       
     }
     
     @Test
@@ -71,11 +71,11 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='media_delivery']/..//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='media_delivery']//lst[@name='join']/lst[@name='conversion']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='media_delivery']//lst[@name='join']/lst[@name='conversion']/long[@name='union']").longValue(), 2L);
         
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 2L);       
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='conversion']//lst[@name='join']/lst[@name='media_delivery']/long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='conversion']//lst[@name='join']/lst[@name='media_delivery']/long[@name='union']").longValue(), 2L);       
     }
     
     @Test
@@ -92,7 +92,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getLong(xml, "//str[text()='conversion']/..//arr[@name='purchased_qty']/lst/str[text()='2']/..//long[@name='intersect']").longValue(), 1L);
+        assertEquals(XPathHelper.getLong(xml, "//lst[@name='conversion']//lst[@name='purchased_qty']/lst[@name='2']//long[@name='intersect']").longValue(), 1L);
     }
     
     @Test
@@ -127,13 +127,13 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         System.out.println(xml);
         
         // we should have 2 unique shoppers
-        assertEquals(XPathHelper.query(xml, "//arr[@name='network_id']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='site_id']").getLength(), 2);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='type']/lst/str[text()='media_delivery']").getLength(), 2);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='type']/lst/str[text()='conversion']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='network_id']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='site_id']").getLength(), 2);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='type']/lst[@name='media_delivery']").getLength(), 2);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='type']/lst[@name='conversion']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//arr[@name='type']/lst/str[text()='conversion']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//arr[@name='type']/lst/str[text()='media_delivery']/..//long[@name='unique']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='type']/lst[@name='conversion']//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='type']/lst[@name='media_delivery']//long[@name='unique']"), "2");
     }
     
     @Test
@@ -150,17 +150,17 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         System.out.println(xml);
       
 
-        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='111111']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='222222']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='2222222']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='333333']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='source_ids']/lst/str[text()='0000000']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='source_ids']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='source_ids']/lst[@name='111111']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='source_ids']/lst[@name='222222']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='source_ids']/lst[@name='2222222']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='source_ids']/lst[@name='333333']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='source_ids']/lst[@name='0000000']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='111111']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='111111']/..//int[@name='total']"), "2");
-        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='222222']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//arr[@name='source_ids']/lst/str[text()='222222']/..//int[@name='total']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='source_ids']/lst[@name='111111']//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='source_ids']/lst[@name='111111']//int[@name='total']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='source_ids']/lst[@name='222222']//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='source_ids']/lst[@name='222222']//int[@name='total']"), "2");
     }
     
     @Test
@@ -177,13 +177,13 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         System.out.println(xml);
         
         // we should have 2 unique shoppers
-        assertEquals(XPathHelper.query(xml, "//arr[@name='type']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//str[text()='conversion']").getLength(), 0);
-        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']/..//int[@name='12341234']").getLength(), 0);
-        assertEquals(XPathHelper.query(xml, "//str[text()='media_delivery']/..//str[text()='88888888']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='type']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='media_delivery']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='conversion']").getLength(), 0);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='media_delivery']//lst[@name='12341234']").getLength(), 0);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='media_delivery']//lst[@name='88888888']").getLength(), 1);
         
-        assertEquals(XPathHelper.getText(xml, "//str[text()='media_delivery']/..//str[text()='88888888']/../int[@name='count']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='media_delivery']//lst[@name='88888888']//int[@name='count']"), "1");
     }
     
     @Test
@@ -196,6 +196,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         // date (day), (hour), (week), (month)
         p.set(GroupByComponent.Params.GROUPBY, "dt,cid");
         p.set(GroupByComponent.Params.DISTINCT, "true");
+        p.set(GroupByComponent.Params.INTERSECT, "true");
         p.set(GroupByComponent.Params.RANGE + ".dt.start", "2014-01-01T00:00:00Z/DAY-1DAY");
         p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-01-3T00:00:00Z/DAY+1DAY");
         p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1DAY");
@@ -203,8 +204,8 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getText(xml, "//lst[@name='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']//long[@name='intersect']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//lst[@name='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']//long[@name='union']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-02T00:00:00Z']//long[@name='intersect']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-02T00:00:00Z']//long[@name='union']"), "2");
     }
     
     @Test
@@ -225,8 +226,8 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2014-01-02T00:00:00Z]']/..//long[@name='intersect']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2014-01-02T00:00:00Z]']/..//long[@name='union']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-01T00:00:00Z']//long[@name='intersect']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-01T00:00:00Z']//long[@name='union']"), "2");
     }
     
     @Test
@@ -248,8 +249,8 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//long[@name='unique']"), "1");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='total']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-01T00:00:00Z']//long[@name='unique']"), "1");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-01T00:00:00Z']//int[@name='total']"), "2");
 
     }
     
@@ -272,20 +273,20 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst").getLength(), 14);	// 14 days
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-23T00:00:00Z TO 2013-12-24T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-24T00:00:00Z TO 2013-12-25T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-25T00:00:00Z TO 2013-12-26T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-26T00:00:00Z TO 2013-12-27T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-27T00:00:00Z TO 2013-12-28T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-28T00:00:00Z TO 2013-12-29T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-29T00:00:00Z TO 2013-12-30T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-30T00:00:00Z TO 2013-12-31T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2013-12-31T00:00:00Z TO 2014-01-01T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-01T00:00:00Z TO 2014-01-02T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-02T00:00:00Z TO 2014-01-03T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-03T00:00:00Z TO 2014-01-04T00:00:00Z]']").getLength(), 1);
-        assertEquals(XPathHelper.query(xml, "//arr[@name='dt']/lst/str[text()='dt:[2014-01-04T00:00:00Z TO 2014-01-05T00:00:00Z]']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst").getLength(), 14);	// 14 days
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-23T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-24T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-25T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-26T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-27T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-28T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-29T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-30T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2013-12-31T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2014-01-01T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2014-01-02T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2014-01-03T00:00:00Z']").getLength(), 1);
+        assertEquals(XPathHelper.query(xml, "//lst[@name='dt']/lst[@name='2014-01-04T00:00:00Z']").getLength(), 1);
     }
     
     @Test
@@ -305,9 +306,9 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         String xml = h.query(req);
         System.out.println(xml);
         
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='count']"), "6");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//long[@name='unique']"), "2");
-        assertEquals(XPathHelper.getText(xml, "//str[text()='dt:[2014-01-01T00:00:00Z TO 2015-01-01T00:00:00Z]']/..//int[@name='total']"), "6");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-01T00:00:00Z']//int[@name='count']"), "6");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-01T00:00:00Z']//long[@name='unique']"), "2");
+        assertEquals(XPathHelper.getText(xml, "//lst[@name='2014-01-01T00:00:00Z']//int[@name='total']"), "6");
     }
     
     @Test

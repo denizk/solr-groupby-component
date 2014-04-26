@@ -52,15 +52,10 @@ public class HyperLogLogUnion {
 			}
 		}
 		
-		if (itemB.node.get("value") == null) return;
-		String key = itemB.node.get("value").toString();
-		String path = itemB.node.get("path") != null ? itemB.node.get("path").toString() : "";
-		if (path.length() > 0 && path.indexOf("/") >= 0) {
-			path = path.substring(0, path.indexOf("/"));
-			path = path.substring(path.indexOf(":")+1);
-		} else {
-			path = key;
-		}
+		if (false == itemB.node instanceof ExtraNamedList) return;
+		ExtraNamedList itemBMeta = (ExtraNamedList)itemB.node;
+        String path = itemBMeta.getMeta("path", String.class);  
+        String[] paths = path.split("/");
 		
 		ICardinality uniques = itemA.root.merge(itemB.root);
 		long totalA = itemA.root.cardinality();
@@ -76,13 +71,20 @@ public class HyperLogLogUnion {
 			itemA.node.add("join", new NamedList<Object>());
 		}
 		NamedList<Object> items = ((NamedList<Object>) itemA.node.get("join"));
-		if (key == path) {
-			items.add(key, wrap);
-		} else {
-			if (items.get(path) == null) {
-				items.add(path, new NamedList<Object>());
-			}
-			((NamedList<Object>)items.get(path)).add(key, wrap);
+		
+		for (int i=0;i<paths.length;i++) {
+		    String rel = paths[i];
+            String value = rel.split(":")[1];
+            if (rel.matches("^.*:\\[.*\\sTO\\s.*\\]$")) {
+                value = rel.substring(rel.indexOf(":")+1).substring(1, rel.indexOf(" TO ")-3);
+            }
+            if (items.get(value) == null) {
+                NamedList<Object> n = (i == paths.length-1) ? wrap : new NamedList<Object>();
+                items.add(value, n);
+                items = n;
+            } else {
+                items = (NamedList<Object>)items.get(value);
+            }
 		}
 	}
 	
