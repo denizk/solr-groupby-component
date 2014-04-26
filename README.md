@@ -135,7 +135,7 @@ Example shows aggregating at a single level, in this case city, to get the total
 ##### Query
 
 	?q=*:*&groupby=type
-          &groupby.stats=amount
+          &groupby.stats=spend
 
 ##### Results
 
@@ -189,8 +189,8 @@ Example shows multi-dimensional aggregates, this time including state and city i
 
 ##### Query 
 
-    ?q=*:*&groupby=city
-          &groupby.stats=amount
+    ?q=*:*&groupby=state,city
+          &groupby.stats=spend
 
 ##### Results
 
