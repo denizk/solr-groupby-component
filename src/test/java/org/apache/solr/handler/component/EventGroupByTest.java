@@ -222,6 +222,7 @@ public class EventGroupByTest extends SolrTestCaseJ4 {
         p.set(GroupByComponent.Params.RANGE + ".dt.end", "2014-01-3T00:00:00Z/DAY+1DAY");
         p.set(GroupByComponent.Params.RANGE + ".dt.gap", "+1DAY");
         p.set(GroupByComponent.Params.ESTIMATE_SIZE, "16");
+        p.set(GroupByComponent.Params.INTERSECT, true);
         SolrQueryRequest req = new LocalSolrQueryRequest(h.getCore(), p);
         String xml = h.query(req);
         System.out.println(xml);

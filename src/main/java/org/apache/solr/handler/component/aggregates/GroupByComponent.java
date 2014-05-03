@@ -272,7 +272,7 @@ public class GroupByComponent extends SearchComponent {
         collectChildren(wrap, contrained_set_of_documents, schema, field, queue, req, docs, params, facets, parents, predicates);
         pivot.add(field, wrap);
         
-        if (params.getBool(Params.DISTINCT, false) && params.getBool(Params.INTERSECT, true)) {
+        if (params.getBool(Params.DISTINCT, false) && params.getBool(Params.INTERSECT, false)) {
             intersect(pivot, params);
         }
     }
@@ -533,7 +533,7 @@ public class GroupByComponent extends SearchComponent {
                     	ExtraNamedList node = new ExtraNamedList();
                     	node.add(UNIQUE, children.size() <= 0 ? 0 : hll.cardinality());
                     	node.add(TOTAL, count);
-                    	if (params.getBool(Params.INTERSECT, true)) {
+                    	if (params.getBool(Params.INTERSECT, false)) {
                     		node.addMeta(HLL, hll);
                     		node.addMeta("value", parent.getKey());
                     		String prior = priorQueries.isEmpty() ? "" : priorQueries.get(priorQueries.size()-1);
